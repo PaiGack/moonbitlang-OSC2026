@@ -1,10 +1,11 @@
 # MoonBit SSH 客户端
 
-使用 MoonBit 实现的 SSH 客户端库，支持 SSH 连接、认证、交互式会话等功能。
+使用 MoonBit 实现的 SSH 客户端库，为 MoonBit 生态提供 SSH 协议支持能力。
 
 ## 项目简介
 
-本项目是一个纯 MoonBit 实现的 SSH 客户端库，旨在为 MoonBit 生态提供 SSH 协议支持能力。项目可用于：
+本项目是一个纯 MoonBit 实现的 SSH 客户端库，目前正在开发中，已完成传输层的基础实现。项目目标是：
+
 - 远程服务器管理
 - 自动化运维脚本
 - SSH 协议教学与研究
@@ -13,18 +14,15 @@
 
 - 应用生态：流行网络协议的 MoonBit 实现
 
-## 功能特性
+## 当前实现
 
-- SSH 协议连接
-- 用户名/密码认证
-- 密钥认证支持
-- 交互式会话
-- 命令执行
+- SSH 传输层基础架构
+- TCP 连接支持
 
 ## 安装方式
 
 ```moonbit
-moon add github.com/your-repo/moonbit-ssh
+moon add github.com/PaiGack/moonbitlang-OSC2026
 ```
 
 ## 使用示例
@@ -39,13 +37,27 @@ print(output)
 ## 项目结构
 
 ```
-src/
-  ssh.mbt          # SSH 连接与认证
-  channel.mbt     # 通道管理
-  kex.mbt         # 密钥交换
-test/
-  connect_test.mbt
-  auth_test.mbt
+code/
+├── cmd/main/main.mbt       # 主程序入口
+├── ssh_client.mbt         # SSH 客户端核心库
+├── ssh_client_test.mbt    # 黑盒测试
+└── ssh_client_wbtest.mbt  # 白盒测试
+```
+
+## 开发指南
+
+```bash
+# 构建项目
+moon build
+
+# 运行测试
+moon test
+
+# 运行主程序
+moon run cmd/main
+
+# 格式化代码
+moon fmt
 ```
 
 ## 许可证
