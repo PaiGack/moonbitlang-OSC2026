@@ -1,6 +1,6 @@
-// import {
-//   "username/ssh_client" @lib,
-// }
+import {
+  "username/ssh_client" @SSH,
+}
 
 options(
   "is-main": true,

@@ -23,3 +23,11 @@ The project follows this structure:
 - `ssh_client_test.mbt` - Tests
 
 Currently the transport layer is being implemented with TCP connection support as the foundation for SSH protocol.
+
+## Skills
+
+The `moonbitlang` skill is available for MoonBit development tasks:
+- Use when working with MoonBit language features, packages, or tooling
+- Invoke via `/moonbitlang` or relevant slash commands
+
+Skill repository: https://github.com/moonbitlang/skills
