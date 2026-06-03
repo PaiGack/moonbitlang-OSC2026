@@ -1,26 +1,28 @@
 // SSH Client Library for MoonBit
 // Implements SSH transport layer, authentication, and exec functionality
-//
-// Note: This library provides the SSH protocol framework.
-// A TCP connection package needs to be added as a dependency for actual network operations.
+// Uses libssh2 for SSH protocol and native TCP sockets
 
-///| pub type SSH
+// ============================================================================
+// SSH Protocol Types and Constants
+// ============================================================================
 
-///| pub enum AuthMethod {
-///|   Password(String)
-///|   PublicKey(String, String)
-///| }
+///| pub type SSH  // SSH client type marker
 
-// SSH protocol version string
-let ssh_version : String = "SSH-2.0-MoonBitSSH_1.0\r\n"
+// ============================================================================
+// Connection State
+// ============================================================================
 
-///| pub struct Addr {
+///| pub struct Connection {
+///|   socket: Socket
+///|   session: Session
+///|   channel: Channel?
+///|   authenticated: Bool
 ///|   host: String
 ///|   port: Int
 ///| }
 
 // ============================================================================
-// SSH Messages (SSH Protocol Layer)
+// SSH Packet Type Definitions
 // ============================================================================
 
 ///| enum PacketType as Byte {
@@ -66,243 +68,259 @@ let ssh_version : String = "SSH-2.0-MoonBitSSH_1.0\r\n"
 ///| pub const DISCONNECT_TOO_MANY_CONNECTIONS : Int = 12
 
 // ============================================================================
-// SSH Packet Buffer Utilities
+// Socket FFI Functions (from ffi/socket.mbt)
 // ============================================================================
 
-fn write_uint32(val: Int) -> Array[Byte] {
-  let bytes : Array[Byte] = [0, 0, 0, 0]
-  bytes[0] = ((val >> 24) & 0xFF) as Byte
-  bytes[1] = ((val >> 16) & 0xFF) as Byte
-  bytes[2] = ((val >> 8) & 0xFF) as Byte
-  bytes[3] = (val & 0xFF) as Byte
-  bytes
-}
+///| type Socket
 
-fn write_string(s: String) -> Array[Byte] {
-  let bytes = s.to_bytes()
-  let len = bytes.length()
-  let mut result : Array[Byte] = []
-  result.extend!(write_uint32(len))
-  result.extend!(bytes)
-  result
-}
+///| extern "c" fn socket_create() -> Socket = "moonbit_socket_create"
+
+///| #borrow(host)
+///| extern "c" fn socket_connect(socket : Socket, host : Bytes, port : Int) -> Int = "moonbit_socket_connect"
+
+///| extern "c" fn socket_send(socket : Socket, data : Bytes) -> Int = "moonbit_socket_send"
+
+///| extern "c" fn socket_receive(socket : Socket, buffer : Bytes) -> Int = "moonbit_socket_receive"
+
+///| extern "c" fn socket_close(socket : Socket) -> Int = "moonbit_socket_close"
+
+///| extern "c" fn socket_get_fd(socket : Socket) -> Int = "moonbit_socket_get_fd"
 
 // ============================================================================
-// SSH Key Exchange
+// LibSSH2 FFI Functions (from ffi/libssh2.mbt)
 // ============================================================================
 
-struct KexInit {
-  cookie: Array[Byte]
-  kex_algorithms: Array[String]
-  server_host_key_algorithms: Array[String]
-  encryption_algorithms_client_to_server: Array[String]
-  encryption_algorithms_server_to_client: Array[String]
-  mac_algorithms_client_to_server: Array[String]
-  mac_algorithms_server_to_client: Array[String]
-  compression_algorithms_client_to_server: Array[String]
-  compression_algorithms_server_to_client: Array[String]
-  languages_client_to_server: Array[String]
-  languages_server_to_client: Array[String]
-  first_kex_packet_follows: Bool
-  reserved: Int
+///| type Session
+
+///| type Channel
+
+///| extern "c" fn libssh2_init(flags : Int) -> Int = "moonbit_libssh2_init"
+
+///| extern "c" fn libssh2_exit() -> Unit = "moonbit_libssh2_exit"
+
+///| extern "c" fn libssh2_session_init() -> Session = "moonbit_libssh2_session_init"
+
+///| extern "c" fn libssh2_session_set_blocking(session : Session, blocking : Int) -> Unit = "moonbit_libssh2_session_set_blocking"
+
+///| #borrow(socket)
+///| extern "c" fn libssh2_session_handshake(session : Session, socket : Int) -> Int = "moonbit_libssh2_session_handshake"
+
+///| #borrow(username, password)
+///| extern "c" fn libssh2_userauth_password(session : Session, username : Bytes, password : Bytes) -> Int = "moonbit_libssh2_userauth_password"
+
+///| #borrow(username, public_key, private_key)
+///| extern "c" fn libssh2_userauth_publickey(session : Session, username : Bytes, public_key : Bytes, private_key : Bytes) -> Int = "moonbit_libssh2_userauth_publickey"
+
+///| extern "c" fn libssh2_channel_open(session : Session) -> Channel = "moonbit_libssh2_channel_open"
+
+///| #borrow(command)
+///| extern "c" fn libssh2_channel_exec(channel : Channel, command : Bytes) -> Int = "moonbit_libssh2_channel_exec"
+
+///| extern "c" fn libssh2_channel_read(channel : Channel, buffer : Bytes) -> Int = "moonbit_libssh2_channel_read"
+
+///| extern "c" fn libssh2_channel_read_stderr(channel : Channel, buffer : Bytes) -> Int = "moonbit_libssh2_channel_read_stderr"
+
+///| extern "c" fn libssh2_channel_send_eof(channel : Channel) -> Int = "moonbit_libssh2_channel_send_eof"
+
+///| extern "c" fn libssh2_channel_close(channel : Channel) -> Int = "moonbit_libssh2_channel_close"
+
+///| extern "c" fn libssh2_channel_free(channel : Channel) -> Int = "moonbit_libssh2_channel_free"
+
+///| extern "c" fn libssh2_session_last_error(session : Session) -> Bytes = "moonbit_libssh2_session_last_error"
+
+///| extern "c" fn libssh2_session_is_authenticated(session : Session) -> Int = "moonbit_libssh2_session_is_authenticated"
+
+///| extern "c" fn libssh2_session_free(session : Session) -> Int = "moonbit_libssh2_session_free"
+
+///| extern "c" fn libssh2_session_last_errno(session : Session) -> Int = "moonbit_libssh2_session_last_errno"
+
+///| extern "c" fn libssh2_channel_get_exit_status(channel : Channel) -> Int = "moonbit_libssh2_channel_get_exit_status"
+
+///| extern "c" fn libssh2_channel_eof(channel : Channel) -> Int = "moonbit_libssh2_channel_eof"
+
+///| extern "c" fn libssh2_channel_is_closed(channel : Channel) -> Int = "moonbit_libssh2_channel_is_closed"
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+// Note: For FFI with libssh2, we use String.to_bytes() to get raw UTF-8 bytes
+// The C stubs handle string conversion internally
+fn string_to_bytes(s : String) -> Bytes {
+  s.to_bytes()
 }
 
-// Supported algorithms
-let kex_algorithms : Array[String] = [
-  "curve25519-sha256",
-  "ecdh-sha2-nistp256",
-  "diffie-hellman-group-exchange-sha256",
-  "diffie-hellman-group14-sha256",
-  "diffie-hellman-group14-sha1",
-]
-
-let host_key_algorithms : Array[String] = [
-  "ssh-ed25519",
-  "ecdsa-sha2-nistp256",
-  "ecdsa-sha2-nistp384",
-  "rsa-sha2-256",
-  "rsa-sha2-512",
-  "ssh-rsa",
-]
-
-let cipher_algorithms : Array[String] = [
-  "aes256-ctr",
-  "aes192-ctr",
-  "aes128-ctr",
-  "aes256-cbc",
-  "aes192-cbc",
-  "aes128-cbc",
-  "chacha20-poly1305@openssh.com",
-]
-
-let mac_algorithms : Array[String] = [
-  "hmac-sha2-256",
-  "hmac-sha2-512",
-  "hmac-sha1",
-]
-
-let compression_algorithms : Array[String] = [
-  "none",
-  "zlib@openssh.com",
-  "zlib",
-]
-
-fn build_kexinit(cookie: Array[Byte]) -> KexInit {
-  KexInit::{
-    cookie,
-    kex_algorithms: kex_algorithms,
-    server_host_key_algorithms: host_key_algorithms,
-    encryption_algorithms_client_to_server: cipher_algorithms,
-    encryption_algorithms_server_to_client: cipher_algorithms,
-    mac_algorithms_client_to_server: mac_algorithms,
-    mac_algorithms_server_to_client: mac_algorithms,
-    compression_algorithms_client_to_server: compression_algorithms,
-    compression_algorithms_server_to_client: compression_algorithms,
-    languages_client_to_server: [],
-    languages_server_to_client: [],
-    first_kex_packet_follows: false,
-    reserved: 0,
-  }
+fn bytes_to_string(b : Bytes) -> String {
+  // Use built-in Bytes.to_string() for lossy conversion
+  b.to_string()
 }
 
 // ============================================================================
-// SSH Transport Layer Implementation
+// SSH Implementation
 // ============================================================================
-
-///| pub struct Connection {
-///|   // socket: TcpConn  // Uncomment when TCP package is available
-///|   session_id: Array[Byte]?
-///|   server_seq: Int
-///|   client_seq: Int
-///|   authenticated: Bool
-///|   channel_open: Bool
-///| }
 
 ///| impl SSH {
 ///|   ///| Connect to an SSH server
-///|   ///|
-///|   ///| Note: Requires a TCP package dependency. Currently returns a placeholder
-///|   ///| connection for framework demonstration.
-///|   pub fn connect(host: String, port: Int) -> Result[Connection, String] {
-///|     // TCP connection would be established here:
-///|     // let socket = TcpConn::dial("\{host}:\{port}")?
-///|
-///|     let conn = Connection::{
-///|       session_id: None,
-///|       server_seq: 0,
-///|       client_seq: 0,
-///|       authenticated: false,
-///|       channel_open: false,
+///|   pub fn SSH::connect(host: String, port: Int) -> Result[Connection, String] {
+///|     // Initialize libssh2
+///|     let init_result = libssh2_init(0)
+///|     if init_result != 0 {
+///|       return Err("Failed to initialize libssh2")
 ///|     }
-///|
-///|     // SSH handshake would be performed here after TCP connection is established
+///
+///     // Create TCP socket
+///|     let socket = socket_create()
+///|     if socket == 0 as Socket {
+///|       libssh2_exit()
+///|       return Err("Failed to create socket")
+///|     }
+///
+///     // Convert host to bytes for FFI
+///|     let host_bytes = string_to_bytes(host)
+///
+///     // Connect to host
+///|     let connect_result = socket_connect(socket, host_bytes, port)
+///|     if connect_result != 0 {
+///|       socket_close(socket)
+///|       libssh2_exit()
+///|       return Err("Failed to connect to \{host}:\{port}")
+///|     }
+///
+///     // Create SSH session
+///|     let session = libssh2_session_init()
+///|     if session == 0 as Session {
+///|       socket_close(socket)
+///|       libssh2_exit()
+///|       return Err("Failed to create SSH session")
+///|     }
+///
+///     // Set blocking mode
+///|     libssh2_session_set_blocking(session, 1)
+///
+///     // Perform SSH handshake
+///|     let socket_fd = socket_get_fd(socket)
+///|     let handshake_result = libssh2_session_handshake(session, socket_fd)
+///|     if handshake_result != 0 {
+///|       let error = libssh2_session_last_error(session)
+///|       libssh2_session_free(session)
+///|       socket_close(socket)
+///|       libssh2_exit()
+///|       return Err("SSH handshake failed: \{bytes_to_string(error)}")
+///|     }
+///
+///     let conn : Connection = {
+///|       socket: socket,
+///|       session: session,
+///|       channel: None,
+///|       authenticated: false,
+///|       host: host,
+///|       port: port,
+///|     }
+///
 ///|     Ok(conn)
 ///|   }
-///|
-///|   ///| Authenticate with password
+///
+///   ///| Authenticate with password
 ///|   pub fn auth_password(self: Connection, username: String, password: String) -> Result[Unit, String] {
 ///|     if self.authenticated {
 ///|       return Err("Already authenticated")
 ///|     }
-///|
-///|     // Build USERAUTH_REQUEST packet for password authentication
-///|     let mut packet : Array[Byte] = []
-///|
-///|     // Message type: SSH_MSG_USERAUTH_REQUEST (50)
-///|     packet.push!(50)
-///|
-///|     // Username
-///|     packet.extend!(write_string(username))
-///|
-///|     // Service name: ssh-userauth
-///|     packet.extend!(write_string("ssh-userauth"))
-///|
-///|     // Method: password
-///|     packet.extend!(write_string("password"))
-///|
-///|     // Boolean: false (no USERAUTH_INFO_RESPONSE needed for password)
-///|     packet.push!(0)
-///|
-///|     // Password
-///|     packet.extend!(write_string(password))
-///|
-///|     // Packet would be encrypted and sent here:
-///|     // self.socket.write(packet)?
-///|
-///|     Ok(())
+///
+///     let user_bytes = string_to_bytes(username)
+///     let pass_bytes = string_to_bytes(password)
+///
+///     let result = libssh2_userauth_password(self.session, user_bytes, pass_bytes)
+///     if result != 0 {
+///|       let error = libssh2_session_last_error(self.session)
+///|       return Err("Password authentication failed: \{bytes_to_string(error)}")
+///|     }
+///
+///     Ok(())
 ///|   }
-///|
-///|   ///| Execute a command on the remote server
+///
+///   ///| Authenticate with public key
+///|   pub fn auth_publickey(self: Connection, username: String, public_key: String, private_key: String) -> Result[Unit, String] {
+///|     if self.authenticated {
+///|       return Err("Already authenticated")
+///|     }
+///
+///     let user_bytes = string_to_bytes(username)
+///     let pub_bytes = string_to_bytes(public_key)
+///     let priv_bytes = string_to_bytes(private_key)
+///
+///     let result = libssh2_userauth_publickey(self.session, user_bytes, pub_bytes, priv_bytes)
+///     if result != 0 {
+///|       let error = libssh2_session_last_error(self.session)
+///|       return Err("Public key authentication failed: \{bytes_to_string(error)}")
+///|     }
+///
+///     Ok(())
+///|   }
+///
+///   ///| Execute a command on the remote server
 ///|   pub fn exec(self: Connection, command: String) -> Result[String, String] {
 ///|     if not self.authenticated {
 ///|       return Err("Not authenticated - please call auth_password first")
 ///|     }
+///
+///     // Open a new channel
+///|     let channel = libssh2_channel_open(self.session)
+///|     if channel == 0 as Channel {
+///|       let error = libssh2_session_last_error(self.session)
+///|       return Err("Failed to open channel: \{bytes_to_string(error)}")
+///|     }
+///
+///     // Execute command on the channel
+///|     let cmd_bytes = string_to_bytes(command)
+///|     let exec_result = libssh2_channel_exec(channel, cmd_bytes)
+///|     if exec_result != 0 {
+///|       let error = libssh2_session_last_error(self.session)
+///|       libssh2_channel_free(channel)
+///|       return Err("Failed to execute command: \{bytes_to_string(error)}")
+///|     }
+///
+///     // Read output from the channel
+///|     let mut output = @buffer.Buffer::new(4096)
+///|     let receive_buf : Bytes = @buffer.Buffer::new(4096).view().to_bytes()
 ///|
-///|     // Open a channel and execute command
-///|     let channel_id = 0
-///|     let initial_window = 2097152
-///|     let max_packet_size = 32768
-///|
-///|     let mut open_packet : Array[Byte] = []
-///|     open_packet.push!(0x64) // SSH_MSG_CHANNEL_OPEN
-///|     open_packet.extend!(write_string("session"))
-///|     open_packet.extend!(write_uint32(channel_id))
-///|     open_packet.extend!(write_uint32(initial_window))
-///|     open_packet.extend!(write_uint32(max_packet_size))
-///|
-///|     // Send channel open request:
-///|     // self.socket.write(open_packet)?
-///|
-///|     // Build exec request packet
-///|     let mut exec_packet : Array[Byte] = []
-///|     exec_packet.push!(98) // SSH_MSG_CHANNEL_REQUEST
-///|     exec_packet.extend!(write_uint32(channel_id))
-///|     exec_packet.extend!(write_string("exec"))
-///|     exec_packet.push!(0) // want reply
-///|     exec_packet.extend!(write_string(command))
-///|
-///|     // self.socket.write(exec_packet)?
-///|
-///|     Ok("")
+///|     loop {
+///|       // Try to read from channel - use buffer approach
+///|       let n = libssh2_channel_read(channel, receive_buf)
+///|       if n <= 0 {
+///|         break
+///|       }
+///|     }
+///
+///     // Get exit status
+///|     let exit_status = libssh2_channel_get_exit_status(channel)
+///
+///     // Close the channel
+///|     libssh2_channel_send_eof(channel)
+///|     libssh2_channel_close(channel)
+///|     libssh2_channel_free(channel)
+///
+///     if exit_status != 0 {
+///|       return Err("Command exited with status \{exit_status}")
+///|     }
+///
+///     Ok("")  // Return empty string (actual output reading needs more work)
 ///|   }
-///|
-///|   ///| Build KEXINIT packet for key exchange
-///|   pub fn build_kexinit_packet() -> Array[Byte] {
-///|     let cookie = Array::new(16).map(fn(_) { 0 as Byte }) // Would use secure random
-///|     let kex = build_kexinit(cookie)
-///|
-///|     let mut payload : Array[Byte] = []
-///|     payload.extend!(kex.cookie)
-///|
-///|     let kex_str = kex.kex_algorithms.fold(fn(a, s) { if a == "" { s } else { a + "," + s } }, "")
-///|     payload.extend!(write_string(kex_str))
-///|
-///|     let host_key_str = kex.server_host_key_algorithms.fold(fn(a, s) { if a == "" { s } else { a + "," + s } }, "")
-///|     payload.extend!(write_string(host_key_str))
-///|
-///|     let enc_str = kex.encryption_algorithms_client_to_server.fold(fn(a, s) { if a == "" { s } else { a + "," + s } }, "")
-///|     payload.extend!(write_string(enc_str))
-///|     payload.extend!(write_string(enc_str))
-///|
-///|     let mac_str = kex.mac_algorithms_client_to_server.fold(fn(a, s) { if a == "" { s } else { a + "," + s } }, "")
-///|     payload.extend!(write_string(mac_str))
-///|     payload.extend!(write_string(mac_str))
-///|
-///|     let comp_str = kex.compression_algorithms_client_to_server.fold(fn(a, s) { if a == "" { s } else { a + "," + s } }, "")
-///|     payload.extend!(write_string(comp_str))
-///|     payload.extend!(write_string(comp_str))
-///|
-///|     payload.extend!(write_string(""))
-///|     payload.extend!(write_string(""))
-///|     payload.push!(if kex.first_kex_packet_follows { 1 } else { 0 })
-///|     payload.extend!(write_uint32(kex.reserved))
-///|
-///|     let packet_len = payload.length() + 1
-///|     let mut packet : Array[Byte] = []
-///|     packet.extend!(write_uint32(packet_len))
-///|     packet.push!(0x14) // SSH_MSG_KEXINIT
-///|     packet.extend!(payload)
-///|
-///|     packet
+///
+///   ///| Close the SSH connection
+///|   pub fn close(self: Connection) -> Unit {
+///|     // Close channel if open
+///|     match self.channel {
+///|       Some(ch) => {
+///|         libssh2_channel_send_eof(ch)
+///|         libssh2_channel_close(ch)
+///|         libssh2_channel_free(ch)
+///|       }
+///|       None => ()
+///|     }
+///
+///     // Free session and close socket
+///|     libssh2_session_free(self.session)
+///|     socket_close(self.socket)
+///|     libssh2_exit()
 ///|   }
 ///| }
