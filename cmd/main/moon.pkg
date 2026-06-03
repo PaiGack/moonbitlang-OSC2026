@@ -1,0 +1,7 @@
+// import {
+//   "username/ssh_client" @lib,
+// }
+
+options(
+  "is-main": true,
+)
