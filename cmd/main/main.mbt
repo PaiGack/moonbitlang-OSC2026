@@ -1,4 +1,4 @@
-///|
+
 /// Entry point for the SSH client CLI
 /// Run with `moon run cmd/main` from the project root.
 fn main {
