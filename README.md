@@ -1,7 +1,5 @@
 # MoonSSH — MoonBit SSH 客户端库
 
-> 参赛作品：MoonBit 2026 开源竞赛（[PaiGack/ssh_client](https://github.com/PaiGack/moonbitlang-OSC2026)）
-
 使用 **MoonBit** 实现的 **SSHv2 客户端库**。协议层完全 MoonBit 原创；密码学原语通过 FFI 复用系统 OpenSSL `libcrypto`，不重复造轮子。
 
 ## 1. 项目状态
@@ -150,25 +148,21 @@ code/
 | 依赖 | 版本 | 说明 |
 |------|------|------|
 | MoonBit toolchain | ≥ 0.19 | https://www.moonbitlang.com/ |
-| OpenSSL `libcrypto` | 1.1.1+ 或 3.x | 系统库（Linux/macOS 自带；Windows 用 vcpkg |
-| MSVC（仅 Windows） | VS Build Tools | 编译 `moonbitlang/async` 的 C 端 |
+| OpenSSL `libcrypto` | 1.1.1+ 或 3.x | 系统库（Linux/macOS 自带；Windows 用 minGW OpenSSL  |
+
+Windows 依赖 MinGW
+
+```bash
+# add C:\msys64\ucrt64\bin to path
+
+pacman -S mingw-w64-ucrt-x86_64-gcc
+pacman -S mingw-w64-ucrt-x86_64-openssh
+```
 
 ### 4.2 构建与运行
 
-**Linux / macOS**
-
 ```bash
 moon run cmd/main -- user@host --port 22 --exec "uname -a"
-```
-
-**Windows**
-
-```bash
-# 方式一：使用一键脚本（自动加载 vcvars64 + 调用 moon）
-scripts\build.bat
-
-# 方式二：手动（先打开 "x64 Native Tools Command Prompt for VS"）
-moon run .\cmd\main\ --target native
 ```
 
 ### 4.3 CLI 用法
@@ -271,17 +265,13 @@ moon coverage analyze > uncovered.log
 | **v0.3** | SFTP 协议层（基于现有 `sftp.mbt` 类型签名落地） |
 | **v1.0** | 文档补全 + CI 矩阵（Linux/macOS/Windows）+ 发布到 mooncakes.io |
 
-详细执行步骤见 [docs/prd_001.md](docs/prd_001.md)。
-
 ## 7. 跨平台注意
 
 | 平台 | 编译 | 运行 |
 |------|------|------|
 | Linux glibc | ✅ | ✅ |
 | macOS | ✅ | ✅ |
-| Windows MSVC | ✅（含 C 端桩） | ⚠️ crypto 桩返回失败，仅可启动到 Banner 交换；完整 KEX/auth/exec 需 Linux/macOS 主机 |
-
-Windows 的 `openssl.c` 中 `moonbitlang_ssh_*` 全部以失败码返回，目的是让 `moon run cmd/main --target native` 在 Windows 上能完成编译/链接。要在 Windows 上跑通完整协议，需要后续将 OpenSSL 后端替换为 Windows BCrypt（或动态链接 `libcrypto-3-x64.dll`），已超出 v0.1 范围。
+| Windows MinGW | ✅ | ✅ |
 
 ## 8. 引用
 
