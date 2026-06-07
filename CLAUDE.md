@@ -13,7 +13,7 @@ MoonBit project commands:
 - `moon test` - Run tests  (windows use command `./scripts/test.bat`)
 - `moon add <package>` - Add a dependency
 - `moon fmt` - Format code
-- `moon run cmd/main` - Run the main program (windows use command `./scripts/build.bat`, after run exe)
+- `moon run cmd/main` - Run the main program (windows use command `./scripts/run.bat`)
 
 ## Architecture
 
