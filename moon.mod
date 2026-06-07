@@ -9,16 +9,16 @@
 //   "moonbitlang/x@0.4.6",
 // }
 
-name = "username/ssh_client"
+name = "PaiGack/ssh_client"
 
 version = "0.1.0"
 
-readme = "README.mbt.md"
+readme = "README.md"
 
-repository = ""
+repository = "https://github.com/PaiGack/moonbitlang-OSC2026.git"
 
 license = "Apache-2.0"
 
-keywords = []
+keywords = ["SSH", "SSH Client", "SSH 客户端"]
 
-description = ""
+description = "使用 MoonBit 实现的 SSH 客户端库"
