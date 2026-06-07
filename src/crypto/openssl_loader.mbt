@@ -18,6 +18,8 @@
 // from @async/socket directly so no BIO method is required.
 // ---------------------------------------------------------------------------
 
+// --- Non-Windows path: dynamic dlopen of libcrypto --------------------
+
 ///|
 #cfg(not(platform="windows"))
 #borrow(major, minor, fix)
@@ -52,13 +54,23 @@ fn load_openssl() -> Unit {
   }
 }
 
+// --- Windows path: abort with a clear error message -----------------
+
+///|
+#cfg(platform="windows")
+fn load_openssl() -> Unit {
+  abort(
+    "MoonSSH does not support Windows yet: the OpenSSL libcrypto shim is wired " +
+    "up only for POSIX-like systems (Linux, macOS). Run on Linux/macOS or " +
+    "wait for a Windows-native crypto path.",
+  )
+}
+
 ///|
 /// Trigger OpenSSL symbol loading. Must be called before any other function
 /// in this module that touches OpenSSL through FFI.
 ///
-/// On Windows, OpenSSL is not yet supported; calling any crypto FFI will
-/// abort. The SSH client will not run on Windows until a native crypto path
-/// is added.
+/// On Windows this aborts (see `load_openssl`).
 pub fn ensure_openssl() -> Unit {
   load_openssl()
 }

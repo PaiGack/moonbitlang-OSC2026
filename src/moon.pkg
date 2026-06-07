@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/core/bigint",
+  "moonbitlang/core/encoding/utf8",
+  "PaiGack/ssh_client/src/crypto",
+}
+
+options(
+  targets: {
+    "packet.mbt": [ "native" ],
+  },
+)
