@@ -1,7 +1,0 @@
-import {
-  "username/ssh_client",
-}
-
-options(
-  "is-main": true,
-)
