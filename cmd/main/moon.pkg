@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/argparse",
+  "PaiGack/ssh_client",
+}
+
+options(
+  is_main: true,
+  supported_targets: "+native",
+)
