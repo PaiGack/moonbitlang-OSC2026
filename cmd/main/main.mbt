@@ -16,37 +16,27 @@ async fn main {
   let argv = get_argv()
   let (opts, password, command) = parse_args(argv) catch {
     msg => {
-      @stdio.stderr.write("error: " + msg + "\n")
+      @stdio.stderr.write("error: " + msg.to_string() + "\n")
       @stdio.stderr.write(
         "usage: moon run cmd/main -- user@host [--port 22] [--exec CMD] [--password PWD]\n",
       )
-      @sys.exit(2)
+      abort("invalid arguments")
     }
   }
-  let client = @ssh_client.Client::connect(opts) catch {
-    e => {
-      @stdio.stderr.write("connect: " + e.to_string() + "\n")
-      @sys.exit(1)
-    }
+  let client = @src.Client::connect(opts) catch {
+    e => abort("connect: " + e.to_string())
   }
   defer client.close()
   client.kex() catch {
-    e => {
-      @stdio.stderr.write("kex: " + e.to_string() + "\n")
-      @sys.exit(1)
-    }
+    e => abort("kex: " + e.to_string())
   }
   client.auth_password(password) catch {
-    e => {
-      @stdio.stderr.write("auth: " + e.to_string() + "\n")
-      @sys.exit(1)
-    }
+    e => abort("auth: " + e.to_string())
   }
   let ch = client.open_session()
   let output = client.exec(ch, command)
   @stdio.stdout.write(output)
   @stdio.stdout.write("\n")
-  @sys.exit(0)
 }
 
 // --- argv from environment ------------------------------------------
@@ -55,18 +45,18 @@ async fn main {
 /// Read command-line args from a single env var `MOONBIT_CLI_ARGS`
 /// (the moon runtime convention) or fall back to an empty list.
 fn get_argv() -> Array[String] {
-  let s = @sys.get_env_var("MOONBIT_CLI_ARGS") catch { _ => "" }
+  let s = @env.get_env_var("MOONBIT_CLI_ARGS").unwrap_or("")
   if s.length() == 0 {
     []
   } else {
-    s.split(" ").map(v => v.to_string()).collect()
+    s.split(" ").map(v => v.to_owned()).collect()
   }
 }
 
 // --- Minimal argument parser ----------------------------------------
 
 ///|
-fn parse_args(argv : Array[String]) -> (ConnectOptions, String, String) raise {
+fn parse_args(argv : Array[String]) -> (@src.ConnectOptions, String, String) raise {
   if argv.length() == 0 {
     raise CliError("missing user@host positional")
   }
@@ -93,7 +83,7 @@ fn parse_args(argv : Array[String]) -> (ConnectOptions, String, String) raise {
       _ => i = i + 1
     }
   }
-  (@ssh_client.ConnectOptions::new(host, port, user), password, command)
+  (@src.ConnectOptions::new(host, port, user), password, command)
 }
 
 ///|
