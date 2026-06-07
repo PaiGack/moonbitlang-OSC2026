@@ -1,5 +1,6 @@
 import {
   "moonbitlang/async",
+  "moonbitlang/async/socket",
   "moonbitlang/core/bigint",
   "moonbitlang/core/encoding/utf8",
   "PaiGack/ssh_client/src/crypto",
@@ -8,5 +9,11 @@ import {
 options(
   targets: {
     "packet.mbt": [ "native" ],
+    "kex.mbt": [ "native" ],
+    "auth.mbt": [ "native" ],
+    "known_hosts.mbt": [ "native" ],
+    "channel.mbt": [ "native" ],
+    "sftp.mbt": [ "native" ],
+    "ssh_client.mbt": [ "native" ],
   },
 )
