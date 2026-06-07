@@ -22,7 +22,6 @@
 // ---------------------------------------------------------------------------
 
 ///|
-#cfg(not(platform="windows"))
 #borrow(buf)
 extern "C" fn rand_bytes_ffi(buf : FixedArray[Byte], num : Int) -> Int = "moonbitlang_ssh_rand_bytes"
 
@@ -30,40 +29,37 @@ extern "C" fn rand_bytes_ffi(buf : FixedArray[Byte], num : Int) -> Int = "moonbi
 /// Generate cryptographically secure random bytes using OpenSSL's `RAND_bytes`.
 /// Returns the requested number of bytes on success, raises `CryptoError` on
 /// failure.
-pub fn rand_bytes(num : Int) -> Bytes {
+pub fn rand_bytes(num : Int) -> Bytes raise CryptoError {
   ensure_openssl()
   let result = FixedArray::make(num, b'\x00')
   let rc = rand_bytes_ffi(result, num)
   if rc != 1 {
     err_clear()
-    raise @error.CryptoError::RandomFailed("RAND_bytes returned \{rc}")
+    raise CryptoError::RandomFailed("RAND_bytes returned \{rc}")
   }
-  result.unsafe_reinterpret_as_bytes()
+  Bytes::from_fixedarray(result)
 }
 
 ///|
 /// Fills the provided buffer with random bytes in place.
-pub fn rand_bytes_into(buf : Bytes) -> Unit {
+pub fn rand_bytes_into(buf : Bytes) -> Unit raise CryptoError {
   ensure_openssl()
-  let arr = buf.unsafe_reinterpret_as_fixedarray()
+  let arr = buf.to_fixedarray()
   let rc = rand_bytes_ffi(arr, arr.length())
   if rc != 1 {
     err_clear()
-    raise @error.CryptoError::RandomFailed("RAND_bytes returned \{rc}")
+    raise CryptoError::RandomFailed("RAND_bytes returned \{rc}")
   }
 }
 
 ///|
-#cfg(not(platform="windows"))
 #borrow(buf)
 extern "C" fn err_get_error_string_ffi(buf : FixedArray[Byte]) -> Int = "moonbitlang_ssh_get_error_string"
 
 ///|
-#cfg(not(platform="windows"))
 extern "C" fn err_clear_error_ffi() = "moonbitlang_ssh_clear_error"
 
 ///|
-#cfg(not(platform="windows"))
 extern "C" fn err_peek_error_code_ffi() -> UInt = "moonbitlang_ssh_peek_error_code"
 
 ///|
@@ -97,7 +93,7 @@ fn ascii_bytes_to_string(buf : FixedArray[Byte], len : Int) -> String {
   let mut s = ""
   for i in 0..<len {
     let b = buf.unsafe_get(i)
-    s = s + b.unsafe_to_char().to_string()
+    s = s + b.to_char().to_string()
   }
   s
 }

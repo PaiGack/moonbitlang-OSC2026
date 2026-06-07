@@ -25,15 +25,12 @@ pub fn Algorithm::output_len(self : Algorithm) -> Int {
 
 ///|
 pub fn Algorithm::block_len(self : Algorithm) -> Int {
-  // 全部为 64 (SHA-1/256) 或 128 (SHA-384/512) — SSH 暂未用到此值
   match self {
     Sha1 | Sha256 => 64
     Sha384 | Sha512 => 128
   }
 }
 
-///|
-/// C 侧约定的算法 id
 fn alg_id(a : Algorithm) -> Int {
   match a {
     Sha1 => 1
@@ -46,35 +43,32 @@ fn alg_id(a : Algorithm) -> Int {
 // --- FFI ------------------------------------------------------------
 
 ///|
-#cfg(not(platform="windows"))
-#borrow(ctx)
-extern "C" fn md_ctx_new_ffi() -> @c_ffi_opaque = "moonbitlang_ssh_md_ctx_new"
+#external
+priv type MdCtx
 
 ///|
-#cfg(not(platform="windows"))
-extern "C" fn md_ctx_free_ffi(ctx : @c_ffi_opaque) = "moonbitlang_ssh_md_ctx_free"
+extern "C" fn md_ctx_new_ffi() -> MdCtx = "moonbitlang_ssh_md_ctx_new"
 
 ///|
-#cfg(not(platform="windows"))
-extern "C" fn md_init_ffi(ctx : @c_ffi_opaque, alg : Int) -> Int = "moonbitlang_ssh_md_init"
+extern "C" fn md_ctx_free_ffi(ctx : MdCtx) = "moonbitlang_ssh_md_ctx_free"
 
 ///|
-#cfg(not(platform="windows"))
+extern "C" fn md_init_ffi(ctx : MdCtx, alg : Int) -> Int = "moonbitlang_ssh_md_init"
+
+///|
 #borrow(data)
-extern "C" fn md_update_ffi(ctx : @c_ffi_opaque, data : Bytes, len : Int) -> Int = "moonbitlang_ssh_md_update"
+extern "C" fn md_update_ffi(ctx : MdCtx, data : Bytes, len : Int) -> Int = "moonbitlang_ssh_md_update"
 
 ///|
-#cfg(not(platform="windows"))
-#borrow(out)
+#borrow(out, out_len)
 extern "C" fn md_final_ffi(
-  ctx : @c_ffi_opaque,
+  ctx : MdCtx,
   out : FixedArray[Byte],
   out_len : Ref[Int],
 ) -> Int = "moonbitlang_ssh_md_final"
 
 ///|
-#cfg(not(platform="windows"))
-#borrow(data)
+#borrow(data, out, out_len)
 extern "C" fn digest_oneshot_ffi(
   alg : Int,
   data : Bytes,
@@ -84,20 +78,19 @@ extern "C" fn digest_oneshot_ffi(
 ) -> Int = "moonbitlang_ssh_digest"
 
 ///|
-#cfg(not(platform="windows"))
 extern "C" fn md_size_ffi(alg : Int) -> Int = "moonbitlang_ssh_md_size"
 
 // --- Public API ----------------------------------------------------
 
 ///|
-/// Incremental hasher. Use `update` repeatedly then `final` to get digest.
+/// Incremental hasher. Use `update` repeatedly then `finalize` to get digest.
 pub struct Hasher {
-  priv ctx : @c_ffi_opaque
+  priv ctx : MdCtx
   priv alg : Algorithm
 }
 
 ///|
-pub fn Hasher::new(alg : Algorithm) -> Hasher {
+pub fn Hasher::new(alg : Algorithm) -> Hasher raise CryptoError {
   ensure_openssl()
   let ctx = md_ctx_new_ffi()
   if md_init_ffi(ctx, alg_id(alg)) != 1 {
@@ -109,7 +102,7 @@ pub fn Hasher::new(alg : Algorithm) -> Hasher {
 }
 
 ///|
-pub fn update(self : Hasher, data : Bytes) -> Unit {
+pub fn Hasher::update(self : Hasher, data : Bytes) -> Unit raise CryptoError {
   if md_update_ffi(self.ctx, data, data.length()) != 1 {
     err_clear()
     raise CryptoError::OperationFailed("EVP_DigestUpdate", err_get_error())
@@ -117,14 +110,13 @@ pub fn update(self : Hasher, data : Bytes) -> Unit {
 }
 
 ///|
-pub fn update_string(self : Hasher, s : String) -> Unit {
-  let bytes = @utf8.encode(s)
-  self.update(bytes)
+pub fn Hasher::update_string(self : Hasher, s : String) -> Unit raise CryptoError {
+  self.update(@utf8.encode(s))
 }
 
 ///|
 /// Finalize and return the digest. The hasher is consumed.
-pub fn final(self : Hasher) -> Bytes {
+pub fn Hasher::finalize(self : Hasher) -> Bytes raise CryptoError {
   let out_len_ref = Ref(0)
   let out = FixedArray::make(self.alg.output_len(), b'\x00')
   let rc = md_final_ffi(self.ctx, out, out_len_ref)
@@ -133,14 +125,14 @@ pub fn final(self : Hasher) -> Bytes {
     err_clear()
     raise CryptoError::OperationFailed("EVP_DigestFinal_ex", err_get_error())
   }
-  out.unsafe_reinterpret_as_bytes()
+  Bytes::from_fixedarray(out)
 }
 
 // --- One-shot ------------------------------------------------------
 
 ///|
 /// Compute digest in a single call. Convenience over `Hasher`.
-pub fn digest(alg : Algorithm, data : Bytes) -> Bytes {
+pub fn digest(alg : Algorithm, data : Bytes) -> Bytes raise CryptoError {
   ensure_openssl()
   let out_len_ref = Ref(0)
   let out = FixedArray::make(alg.output_len(), b'\x00')
@@ -149,10 +141,10 @@ pub fn digest(alg : Algorithm, data : Bytes) -> Bytes {
     err_clear()
     raise CryptoError::OperationFailed("EVP_Digest", err_get_error())
   }
-  out.unsafe_reinterpret_as_bytes()
+  Bytes::from_fixedarray(out)
 }
 
 ///|
-pub fn digest_string(alg : Algorithm, s : String) -> Bytes {
+pub fn digest_string(alg : Algorithm, s : String) -> Bytes raise CryptoError {
   digest(alg, @utf8.encode(s))
 }

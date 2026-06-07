@@ -1,3 +1,8 @@
+import {
+  "moonbitlang/core/bigint",
+  "moonbitlang/core/encoding/utf8",
+}
+
 options(
   "native-stub": [ "openssl.c" ],
   targets: {
@@ -5,7 +10,6 @@ options(
     "digest.mbt": [ "native" ],
     "mac.mbt": [ "native" ],
     "cipher.mbt": [ "native" ],
-    "bignum.mbt": [ "native" ],
     "kex.mbt": [ "native" ],
     "pkey.mbt": [ "native" ],
     "openssl_loader.mbt": [ "native" ],
