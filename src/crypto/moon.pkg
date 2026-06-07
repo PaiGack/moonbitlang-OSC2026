@@ -1,0 +1,13 @@
+options(
+  "native-stub": [ "openssl.c" ],
+  targets: {
+    "crypto_util.mbt": [ "native" ],
+    "digest.mbt": [ "native" ],
+    "mac.mbt": [ "native" ],
+    "cipher.mbt": [ "native" ],
+    "bignum.mbt": [ "native" ],
+    "kex.mbt": [ "native" ],
+    "pkey.mbt": [ "native" ],
+    "openssl_loader.mbt": [ "native" ],
+  },
+)
