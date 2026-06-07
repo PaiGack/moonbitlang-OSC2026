@@ -2,4 +2,4 @@ call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 set INCLUDE
 
 cd ..
-moon build .\cmd\main\ --target native  
+moon run .\cmd\main\ --target native  
