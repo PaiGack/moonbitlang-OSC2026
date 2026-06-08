@@ -23,6 +23,7 @@ keywords = ["SSH", "SSH Client", "SSH 客户端"]
 
 description = "使用 MoonBit 实现的 SSH 客户端库"
 
+// Removed moonbitlang/async dependency to avoid MSVC requirement on Windows
 // import {
 //   "moonbitlang/async@0.19.2",
 // }
