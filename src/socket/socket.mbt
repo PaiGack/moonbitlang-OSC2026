@@ -5,7 +5,7 @@
 ///|
 /// A TCP connection
 pub struct Tcp {
-  handle : Int  // Socket handle (SOCKET on Windows)
+  handle : Int // Socket handle (SOCKET on Windows)
   host : String
   port : Int
 }
@@ -36,7 +36,12 @@ extern "C" fn socket_send_bytes(handle : Int, data : Bytes, len : Int) -> Int = 
 ///|
 /// Receive data from socket into buffer starting at offset
 #borrow(buffer)
-extern "C" fn socket_recv(handle : Int, buffer : Bytes, offset : Int, size : Int) -> Int = "socket_recv"
+extern "C" fn socket_recv(
+  handle : Int,
+  buffer : Bytes,
+  offset : Int,
+  size : Int,
+) -> Int = "socket_recv"
 
 ///|
 /// Close a socket
@@ -61,7 +66,9 @@ pub fn Tcp::connect_to_host(host : String, port~ : Int) -> Tcp raise {
   let conn_result = socket_connect(handle, host, port)
   if conn_result != 0 {
     socket_close(handle)
-    raise IoError("Failed to connect to \{host}:\{port}, error code: \{conn_result}")
+    raise IoError(
+      "Failed to connect to \{host}:\{port}, error code: \{conn_result}",
+    )
   }
 
   { handle, host, port }
@@ -126,9 +133,16 @@ pub fn Tcp::read_exact(self : Tcp, size : Int) -> Bytes raise {
   let mut total_read = 0
 
   while total_read < size {
-    let bytes_read = socket_recv(self.handle, buffer, total_read, size - total_read)
+    let bytes_read = socket_recv(
+      self.handle,
+      buffer,
+      total_read,
+      size - total_read,
+    )
     if bytes_read <= 0 {
-      raise IoError("Connection closed or error reading, read \{total_read}/\{size} bytes")
+      raise IoError(
+        "Connection closed or error reading, read \{total_read}/\{size} bytes",
+      )
     }
     total_read = total_read + bytes_read
   }

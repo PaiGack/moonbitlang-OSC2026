@@ -51,10 +51,19 @@ pub fn x25519_from_private(priv_bytes : Bytes) -> PKey raise CryptoError {
 pub fn x25519_derive(our : PKey, peer_pub : Bytes) -> Bytes raise CryptoError {
   let out = FixedArray::make(32, b'\x00')
   let out_len = Ref(32)
-  let rc = pkey_derive_ffi(our.raw_ptr(), peer_pub, peer_pub.length(), out, out_len)
+  let rc = pkey_derive_ffi(
+    our.raw_ptr(),
+    peer_pub,
+    peer_pub.length(),
+    out,
+    out_len,
+  )
   if rc != 1 {
     err_clear()
-    raise CryptoError::OperationFailed("EVP_PKEY_derive (X25519)", err_get_error())
+    raise CryptoError::OperationFailed(
+      "EVP_PKEY_derive (X25519)",
+      err_get_error(),
+    )
   }
   let view = FixedArray::makei(out_len.val, i => out.unsafe_get(i))
   Bytes::from_fixedarray(view)
@@ -80,10 +89,19 @@ pub fn nistp256_from_private(priv_bytes : Bytes) -> PKey raise CryptoError {
 /// Compute the nistp256 ECDH shared point's X coordinate (32 bytes) from
 /// our private key and the peer's uncompressed SEC1 public point
 /// (0x04 || X (32) || Y (32)).
-pub fn nistp256_derive(our : PKey, peer_pub_sec1 : Bytes) -> Bytes raise CryptoError {
+pub fn nistp256_derive(
+  our : PKey,
+  peer_pub_sec1 : Bytes,
+) -> Bytes raise CryptoError {
   let out = FixedArray::make(32, b'\x00')
   let out_len = Ref(32)
-  let rc = pkey_derive_ffi(our.raw_ptr(), peer_pub_sec1, peer_pub_sec1.length(), out, out_len)
+  let rc = pkey_derive_ffi(
+    our.raw_ptr(),
+    peer_pub_sec1,
+    peer_pub_sec1.length(),
+    out,
+    out_len,
+  )
   if rc != 1 {
     err_clear()
     raise CryptoError::OperationFailed("EVP_PKEY_derive (EC)", err_get_error())
@@ -104,7 +122,17 @@ pub fn hkdf_sha256(
 ) -> Bytes raise CryptoError {
   ensure_openssl()
   let out = FixedArray::make(length, b'\x00')
-  let rc = hkdf_ffi(2, salt, salt.length(), ikm, ikm.length(), info, info.length(), out, length)
+  let rc = hkdf_ffi(
+    2,
+    salt,
+    salt.length(),
+    ikm,
+    ikm.length(),
+    info,
+    info.length(),
+    out,
+    length,
+  )
   if rc != 1 {
     err_clear()
     raise CryptoError::OperationFailed("HKDF-SHA256", err_get_error())
@@ -122,7 +150,17 @@ pub fn hkdf_sha512(
 ) -> Bytes raise CryptoError {
   ensure_openssl()
   let out = FixedArray::make(length, b'\x00')
-  let rc = hkdf_ffi(4, salt, salt.length(), ikm, ikm.length(), info, info.length(), out, length)
+  let rc = hkdf_ffi(
+    4,
+    salt,
+    salt.length(),
+    ikm,
+    ikm.length(),
+    info,
+    info.length(),
+    out,
+    length,
+  )
   if rc != 1 {
     err_clear()
     raise CryptoError::OperationFailed("HKDF-SHA512", err_get_error())

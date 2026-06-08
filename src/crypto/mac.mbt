@@ -20,6 +20,7 @@ pub fn MacAlgorithm::output_len(self : MacAlgorithm) -> Int {
   }
 }
 
+///|
 fn mac_alg_id(a : MacAlgorithm) -> Int {
   match a {
     HmacSha1 => 1
@@ -45,12 +46,22 @@ extern "C" fn hmac_oneshot_ffi(
 
 ///|
 /// Compute HMAC in a single call. Returns a 20/32/48/64-byte tag.
-pub fn hmac(alg : MacAlgorithm, key : Bytes, data : Bytes) -> Bytes raise CryptoError {
+pub fn hmac(
+  alg : MacAlgorithm,
+  key : Bytes,
+  data : Bytes,
+) -> Bytes raise CryptoError {
   ensure_openssl()
   let out_len_ref = Ref(0)
   let out = FixedArray::make(alg.output_len(), b'\x00')
   let rc = hmac_oneshot_ffi(
-    mac_alg_id(alg), key, key.length(), data, data.length(), out, out_len_ref,
+    mac_alg_id(alg),
+    key,
+    key.length(),
+    data,
+    data.length(),
+    out,
+    out_len_ref,
   )
   if rc != 1 || out_len_ref.val != alg.output_len() {
     err_clear()

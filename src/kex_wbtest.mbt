@@ -4,9 +4,7 @@ test "KexContext::drive sends KEXINIT and negotiates algorithms" {
   let server_payload = build_kexinit_payload(Bytes::make(16, b'\x01'))
   let sent : Array[Bytes] = []
   try ctx.drive(() => server_payload, payload => sent.push(payload)) catch {
-    ProtocolError(message) => {
-      assert_true(message.contains("KEXDH/ECDH"))
-    }
+    ProtocolError(message) => assert_true(message.contains("KEXDH/ECDH"))
     _ => fail("expected protocol error after KEXINIT negotiation")
   } noraise {
     _ => fail("expected KEXDH/ECDH to remain unimplemented")

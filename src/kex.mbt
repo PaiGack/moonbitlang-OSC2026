@@ -18,31 +18,27 @@
 /// Algorithm name registry. Used in the SSH KEXINIT exchange.
 pub fn kex_algorithms() -> Array[String] {
   [
-    "curve25519-sha256", "curve25519-sha256@libssh.org", "ecdh-sha2-nistp256",
-    "diffie-hellman-group14-sha256", "diffie-hellman-group14-sha1",
+    "curve25519-sha256", "curve25519-sha256@libssh.org", "ecdh-sha2-nistp256", "diffie-hellman-group14-sha256",
+    "diffie-hellman-group14-sha1",
   ]
 }
 
 ///|
 pub fn server_host_key_algorithms() -> Array[String] {
-  [
-    "ssh-ed25519", "ecdsa-sha2-nistp256", "rsa-sha2-256", "ssh-rsa",
-  ]
+  ["ssh-ed25519", "ecdsa-sha2-nistp256", "rsa-sha2-256", "ssh-rsa"]
 }
 
 ///|
 pub fn encryption_algorithms() -> Array[String] {
   [
-    "chacha20-poly1305@openssh.com", "aes256-gcm@openssh.com",
-    "aes128-gcm@openssh.com", "aes256-ctr", "aes192-ctr", "aes128-ctr",
+    "chacha20-poly1305@openssh.com", "aes256-gcm@openssh.com", "aes128-gcm@openssh.com",
+    "aes256-ctr", "aes192-ctr", "aes128-ctr",
   ]
 }
 
 ///|
 pub fn mac_algorithms() -> Array[String] {
-  [
-    "hmac-sha2-512", "hmac-sha2-256", "hmac-sha1",
-  ]
+  ["hmac-sha2-512", "hmac-sha2-256", "hmac-sha1"]
 }
 
 ///|
@@ -106,7 +102,17 @@ pub fn parse_kexinit(payload : Bytes) -> KexInit raise SshError {
   let _lang_s2c = r.read_name_list()
   let _first_kex_follows = r.read_byte()
   let _reserved = r.read_uint32()
-  { cookie, kex_algs, host_key_algs, enc_c2s, enc_s2c, mac_c2s, mac_s2c, comp_c2s, comp_s2c }
+  {
+    cookie,
+    kex_algs,
+    host_key_algs,
+    enc_c2s,
+    enc_s2c,
+    mac_c2s,
+    mac_s2c,
+    comp_c2s,
+    comp_s2c,
+  }
 }
 
 ///|
@@ -222,8 +228,7 @@ pub fn encode_mpint_of_bytes(bytes : Bytes) -> Bytes {
   let first = bytes.unsafe_get(0).to_int()
   if first >= 0x80 {
     let buf = FixedArray::make(1, b'\x00')
-    encode_uint32(bytes.length() + 1) +
-      Bytes::from_fixedarray(buf) + bytes
+    encode_uint32(bytes.length() + 1) + Bytes::from_fixedarray(buf) + bytes
   } else {
     encode_string(bytes)
   }
@@ -352,7 +357,7 @@ pub struct KexContext {
 
 ///|
 pub fn KexContext::new(v_c : Bytes, v_s : Bytes) -> KexContext {
-  let cookie = @crypto.rand_bytes(16) catch { _ => Bytes::make(16, b'\x00') }
+  let cookie = kex_random_bytes(16)
   let i_c = build_kexinit_payload(cookie)
   {
     state: Initial,
@@ -372,6 +377,20 @@ pub fn KexContext::new(v_c : Bytes, v_s : Bytes) -> KexContext {
     shared_secret: b"",
     session_id: b"",
     session_id_set: false,
+  }
+}
+
+///|
+#cfg(platform="windows")
+fn kex_random_bytes(n : Int) -> Bytes {
+  Bytes::make(n, b'\x00')
+}
+
+///|
+#cfg(not(platform="windows"))
+fn kex_random_bytes(n : Int) -> Bytes {
+  @crypto.rand_bytes(n) catch {
+    _ => Bytes::make(n, b'\x00')
   }
 }
 

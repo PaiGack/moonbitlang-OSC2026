@@ -62,6 +62,7 @@ fn pattern_matches(pat : String, host : String) -> Bool {
   wildcard_match(p, h)
 }
 
+///|
 fn wildcard_match(pat : String, s : String) -> Bool {
   let mut pi = 0
   let mut si = 0
@@ -145,7 +146,7 @@ pub fn parse_file(content : String) -> Array[KnownHost] raise SshError {
 
 ///|
 /// Encode a known_hosts line.
-pub fn format_entry(self : KnownHost) -> String {
+pub fn KnownHost::format_entry(self : KnownHost) -> String {
   let pats = self.patterns.join(",")
   let key_b64 = encode_base64(self.key)
   "\{pats} \{self.key_alg} \{key_b64}"
@@ -214,6 +215,7 @@ pub fn encode_base64(bytes : Bytes) -> String {
   out
 }
 
+///|
 fn make_b64_decode_table() -> Map[Char, Int] {
   let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
   let m : Map[Char, Int] = Map::new()
@@ -228,6 +230,7 @@ fn make_b64_decode_table() -> Map[Char, Int] {
   m
 }
 
+///|
 fn trim_ascii(s : String) -> String {
   let arr = s.to_array()
   let mut start = 0

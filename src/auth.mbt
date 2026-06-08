@@ -17,9 +17,19 @@ pub const SERVICE_USERAUTH : String = "ssh-userauth"
 
 ///|
 /// 认证方法名常量。
-pub fn method_none() -> String { "none" }
-pub fn method_password() -> String { "password" }
-pub fn method_publickey() -> String { "publickey" }
+pub fn method_none() -> String {
+  "none"
+}
+
+///|
+pub fn method_password() -> String {
+  "password"
+}
+
+///|
+pub fn method_publickey() -> String {
+  "publickey"
+}
 
 // --- Service request / userauth request -----------------------------
 
@@ -95,9 +105,7 @@ pub fn parse_auth_reply(payload : Bytes) -> AuthReply raise SshError {
     b'\x34' => PasswordChangeRequired // SSH_MSG_USERAUTH_PASSWD_CHANGEREQ = 60
     b'\x06' => ServiceAccept // SSH_MSG_SERVICE_ACCEPT = 6
     _ =>
-      raise ProtocolError(
-        "userauth: unexpected message type \{msg.to_int()}",
-      )
+      raise ProtocolError("userauth: unexpected message type \{msg.to_int()}")
   }
 }
 
@@ -158,8 +166,16 @@ pub fn AuthContext::build_initial(self : AuthContext) -> Bytes {
 
 ///|
 /// Build a `password` request.
-pub fn AuthContext::build_password(self : AuthContext, password : String) -> Bytes {
-  build_userauth_request(self.user, "ssh-connection", method_password(), password~)
+pub fn AuthContext::build_password(
+  self : AuthContext,
+  password : String,
+) -> Bytes {
+  build_userauth_request(
+    self.user,
+    "ssh-connection",
+    method_password(),
+    password~,
+  )
 }
 
 ///|
@@ -169,7 +185,14 @@ pub fn AuthContext::build_publickey_query(
   pubkey_alg : String,
   pubkey_blob : Bytes,
 ) -> Bytes {
-  build_userauth_request(self.user, "ssh-connection", method_publickey(), has_signature=false, pubkey_alg~, pubkey_blob~)
+  build_userauth_request(
+    self.user,
+    "ssh-connection",
+    method_publickey(),
+    has_signature=false,
+    pubkey_alg~,
+    pubkey_blob~,
+  )
 }
 
 ///|
@@ -180,7 +203,15 @@ pub fn AuthContext::build_publickey_sign(
   pubkey_blob : Bytes,
   signature : Bytes,
 ) -> Bytes {
-  build_userauth_request(self.user, "ssh-connection", method_publickey(), has_signature=true, pubkey_alg~, pubkey_blob~, signature~)
+  build_userauth_request(
+    self.user,
+    "ssh-connection",
+    method_publickey(),
+    has_signature=true,
+    pubkey_alg~,
+    pubkey_blob~,
+    signature~,
+  )
 }
 
 ///|

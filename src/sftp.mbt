@@ -126,7 +126,9 @@ pub fn Sftp::open(_ch : Channel) -> Sftp {
 
 ///|
 /// Return the negotiated protocol version.
-pub fn Sftp::version(self : Sftp) -> Int { self.version }
+pub fn Sftp::version(self : Sftp) -> Int {
+  self.version
+}
 
 ///|
 /// Read the entire contents of a remote file (v0.1: stub).

@@ -12,15 +12,69 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <windows.h>
 
 #pragma comment(lib, "ws2_32.lib")
 
 static int winsock_initialized = 0;
+static HMODULE winsock_module = 0;
+
+typedef int (WSAAPI *WSAStartupFn)(WORD, LPWSADATA);
+typedef SOCKET (WSAAPI *SocketFn)(int, int, int);
+typedef int (WSAAPI *ConnectFn)(SOCKET, const struct sockaddr *, int);
+typedef int (WSAAPI *SendFn)(SOCKET, const char *, int, int);
+typedef int (WSAAPI *RecvFn)(SOCKET, char *, int, int);
+typedef int (WSAAPI *CloseSocketFn)(SOCKET);
+typedef unsigned long (WSAAPI *InetAddrFn)(const char *);
+typedef struct hostent *(WSAAPI *GetHostByNameFn)(const char *);
+typedef int (WSAAPI *WSAGetLastErrorFn)(void);
+
+static WSAStartupFn p_WSAStartup = 0;
+static SocketFn p_socket = 0;
+static ConnectFn p_connect = 0;
+static SendFn p_send = 0;
+static RecvFn p_recv = 0;
+static CloseSocketFn p_closesocket = 0;
+static InetAddrFn p_inet_addr = 0;
+static GetHostByNameFn p_gethostbyname = 0;
+static WSAGetLastErrorFn p_WSAGetLastError = 0;
+
+static int load_winsock(void) {
+    if (winsock_module) {
+        return 0;
+    }
+    winsock_module = LoadLibraryA("ws2_32.dll");
+    if (!winsock_module) {
+        return -1;
+    }
+    p_WSAStartup = (WSAStartupFn)GetProcAddress(winsock_module, "WSAStartup");
+    p_socket = (SocketFn)GetProcAddress(winsock_module, "socket");
+    p_connect = (ConnectFn)GetProcAddress(winsock_module, "connect");
+    p_send = (SendFn)GetProcAddress(winsock_module, "send");
+    p_recv = (RecvFn)GetProcAddress(winsock_module, "recv");
+    p_closesocket = (CloseSocketFn)GetProcAddress(winsock_module, "closesocket");
+    p_inet_addr = (InetAddrFn)GetProcAddress(winsock_module, "inet_addr");
+    p_gethostbyname = (GetHostByNameFn)GetProcAddress(winsock_module, "gethostbyname");
+    p_WSAGetLastError = (WSAGetLastErrorFn)GetProcAddress(winsock_module, "WSAGetLastError");
+    if (!p_WSAStartup || !p_socket || !p_connect || !p_send || !p_recv ||
+        !p_closesocket || !p_inet_addr || !p_gethostbyname ||
+        !p_WSAGetLastError) {
+        return -1;
+    }
+    return 0;
+}
+
+static uint16_t socket_htons(uint16_t value) {
+    return (uint16_t)((value << 8) | (value >> 8));
+}
 
 static int send_all(SOCKET sock, const char *buffer, int data_len) {
+    if (!p_send && load_winsock() != 0) {
+        return -1;
+    }
     int sent = 0;
     while (sent < data_len) {
-        int result = send(sock, buffer + sent, data_len - sent, 0);
+        int result = p_send(sock, buffer + sent, data_len - sent, 0);
         if (result == SOCKET_ERROR || result == 0) {
             return -1;
         }
@@ -37,9 +91,12 @@ int socket_init(void) {
     if (winsock_initialized) {
         return 0;
     }
+    if (load_winsock() != 0) {
+        return -1;
+    }
 
     WSADATA wsa_data;
-    int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+    int result = p_WSAStartup(MAKEWORD(2, 2), &wsa_data);
     if (result == 0) {
         winsock_initialized = 1;
     }
@@ -51,7 +108,10 @@ int socket_init(void) {
  * Returns socket handle on success, -1 on error
  */
 int socket_create(void) {
-    SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (!p_socket && load_winsock() != 0) {
+        return -1;
+    }
+    SOCKET sock = p_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == INVALID_SOCKET) {
         return -1;
     }
@@ -64,14 +124,14 @@ int socket_create(void) {
  */
 int socket_connect(int handle, moonbit_string_t host_str, int port) {
     // Extract host string from MoonBit string
-    int host_len = Moonbit_string_length(host_str);
+    int host_len = Moonbit_array_length(host_str);
     char *host = (char *)malloc(host_len + 1);
     if (!host) {
         return -1;
     }
 
     // Copy string data (MoonBit strings are UTF-16 on Windows)
-    const uint16_t *src = (const uint16_t *)Moonbit_string_ptr(host_str);
+    const uint16_t *src = host_str;
     for (int i = 0; i < host_len; i++) {
         host[i] = (char)src[i];  // Simple ASCII conversion
     }
@@ -81,16 +141,16 @@ int socket_connect(int handle, moonbit_string_t host_str, int port) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
+    addr.sin_port = socket_htons((uint16_t)port);
 
     // Convert hostname to IP address
-    addr.sin_addr.s_addr = inet_addr(host);
+    addr.sin_addr.s_addr = p_inet_addr(host);
     if (addr.sin_addr.s_addr == INADDR_NONE) {
         // Try resolving as hostname
-        struct hostent *he = gethostbyname(host);
+        struct hostent *he = p_gethostbyname(host);
         free(host);
         if (!he) {
-            return WSAGetLastError();
+            return p_WSAGetLastError();
         }
         memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
     } else {
@@ -99,9 +159,9 @@ int socket_connect(int handle, moonbit_string_t host_str, int port) {
 
     // Connect
     SOCKET sock = (SOCKET)handle;
-    int result = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+    int result = p_connect(sock, (struct sockaddr *)&addr, sizeof(addr));
     if (result == SOCKET_ERROR) {
-        return WSAGetLastError();
+        return p_WSAGetLastError();
     }
 
     return 0;
@@ -112,8 +172,8 @@ int socket_connect(int handle, moonbit_string_t host_str, int port) {
  * Returns number of bytes sent, or -1 on error
  */
 int socket_send(int handle, moonbit_string_t data_str) {
-    int data_len = Moonbit_string_length(data_str);
-    const uint16_t *src = (const uint16_t *)Moonbit_string_ptr(data_str);
+    int data_len = Moonbit_array_length(data_str);
+    const uint16_t *src = data_str;
 
     // Convert to ASCII buffer
     char *buffer = (char *)malloc(data_len);
@@ -134,7 +194,7 @@ int socket_send(int handle, moonbit_string_t data_str) {
 
 int socket_send_bytes(int handle, moonbit_bytes_t data, int data_len) {
     SOCKET sock = (SOCKET)handle;
-    const char *buffer = (const char *)Moonbit_bytes_ptr(data);
+    const char *buffer = (const char *)data;
     return send_all(sock, buffer, data_len);
 }
 
@@ -144,9 +204,12 @@ int socket_send_bytes(int handle, moonbit_bytes_t data, int data_len) {
  */
 int socket_recv(int handle, moonbit_bytes_t buffer, int offset, int size) {
     SOCKET sock = (SOCKET)handle;
-    uint8_t *buf_ptr = (uint8_t *)Moonbit_bytes_ptr(buffer);
+    uint8_t *buf_ptr = (uint8_t *)buffer;
 
-    int result = recv(sock, (char *)(buf_ptr + offset), size, 0);
+    if (!p_recv && load_winsock() != 0) {
+        return -1;
+    }
+    int result = p_recv(sock, (char *)(buf_ptr + offset), size, 0);
     if (result == SOCKET_ERROR) {
         return -1;
     }
@@ -158,8 +221,11 @@ int socket_recv(int handle, moonbit_bytes_t buffer, int offset, int size) {
  * Close a socket
  */
 void socket_close(int handle) {
+    if (!p_closesocket && load_winsock() != 0) {
+        return;
+    }
     SOCKET sock = (SOCKET)handle;
-    closesocket(sock);
+    p_closesocket(sock);
 }
 
 #else
@@ -183,12 +249,12 @@ static int send_all(int sock, const char *buffer, int data_len) {
 }
 
 static char *moonbit_string_to_ascii(moonbit_string_t s, int *len_out) {
-    int len = Moonbit_string_length(s);
+    int len = Moonbit_array_length(s);
     char *out = (char *)malloc((size_t)len + 1);
     if (!out) {
         return 0;
     }
-    const uint16_t *src = (const uint16_t *)Moonbit_string_ptr(s);
+    const uint16_t *src = s;
     for (int i = 0; i < len; i++) {
         out[i] = (char)src[i];
     }
@@ -253,12 +319,12 @@ int socket_send(int handle, moonbit_string_t data_str) {
 }
 
 int socket_send_bytes(int handle, moonbit_bytes_t data, int data_len) {
-    const char *buffer = (const char *)Moonbit_bytes_ptr(data);
+    const char *buffer = (const char *)data;
     return send_all(handle, buffer, data_len);
 }
 
 int socket_recv(int handle, moonbit_bytes_t buffer, int offset, int size) {
-    uint8_t *buf_ptr = (uint8_t *)Moonbit_bytes_ptr(buffer);
+    uint8_t *buf_ptr = (uint8_t *)buffer;
     return (int)recv(handle, (char *)(buf_ptr + offset), (size_t)size, 0);
 }
 

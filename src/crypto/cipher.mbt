@@ -225,7 +225,11 @@ pub fn Cipher::update(self : Cipher, in_ : Bytes) -> Bytes raise CryptoError {
   let out_len = Ref(0)
   let rc = cipher_update_ffi(
     self.ctx,
-    if self.encrypt { 1 } else { 0 },
+    if self.encrypt {
+      1
+    } else {
+      0
+    },
     in_,
     in_len,
     out,
@@ -249,7 +253,11 @@ pub fn Cipher::finalize(self : Cipher) -> Bytes raise CryptoError {
   let out_len = Ref(0)
   let rc = cipher_final_ffi(
     self.ctx,
-    if self.encrypt { 1 } else { 0 },
+    if self.encrypt {
+      1
+    } else {
+      0
+    },
     out,
     out_len,
   )
@@ -300,7 +308,7 @@ pub fn decrypt(
   key : Bytes,
   iv : Bytes,
   ciphertext : Bytes,
-  tag~ : Bytes = b"",
+  tag? : Bytes = b"",
 ) -> Bytes raise CryptoError {
   let c = Cipher::new(alg, key, iv, encrypt=false)
   if c.is_aead && tag.length() > 0 {

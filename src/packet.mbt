@@ -279,7 +279,8 @@ pub fn read_packet(
   if 1 + padding_length > plaintext.length() {
     raise ProtocolError("read_packet: padding_length too large")
   }
-  match Bytes::get_view(plaintext, start=1, end=plaintext.length() - padding_length) {
+  match
+    Bytes::get_view(plaintext, start=1, end=plaintext.length() - padding_length) {
     Some(view) => BytesView::to_owned(view)
     None => raise ProtocolError("read_packet: payload slice")
   }
@@ -299,11 +300,12 @@ pub fn write_packet(
   while (1 + payload.length() + padding_length) % bs != 0 {
     padding_length = padding_length + 1
   }
-  let padding = @crypto.rand_bytes(padding_length) catch {
-    _ => b"" // rand_bytes should never fail in practice; ignore
-  }
-  let body = Bytes::from_fixedarray(FixedArray::make(1, padding_length.to_byte())) +
-    payload + padding
+  let padding = packet_random_bytes(padding_length)
+  let body = Bytes::from_fixedarray(
+      FixedArray::make(1, padding_length.to_byte()),
+    ) +
+    payload +
+    padding
   let len_bytes = encode_uint32(body.length())
   let mut packet = len_bytes + body
   if mac_enabled {
@@ -311,6 +313,20 @@ pub fn write_packet(
     packet = packet + tag
   }
   packet
+}
+
+///|
+#cfg(platform="windows")
+fn packet_random_bytes(n : Int) -> Bytes {
+  Bytes::make(n, b'\x00')
+}
+
+///|
+#cfg(not(platform="windows"))
+fn packet_random_bytes(n : Int) -> Bytes {
+  @crypto.rand_bytes(n) catch {
+    _ => Bytes::make(n, b'\x00')
+  }
 }
 
 // --- Low-level encoding helpers (free functions, no IO) -------------

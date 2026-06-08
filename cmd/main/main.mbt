@@ -17,7 +17,9 @@ fn main {
   let (opts, password, command) = parse_args(argv) catch {
     msg => {
       println("error: " + msg.to_string())
-      println("usage: moon run cmd/main -- user@host [--port 22] [--exec CMD] [--password PWD]")
+      println(
+        "usage: moon run cmd/main -- user@host [--port 22] [--exec CMD] [--password PWD]",
+      )
       abort("invalid arguments")
     }
   }
@@ -53,7 +55,9 @@ fn get_argv() -> Array[String] {
 // --- Minimal argument parser ----------------------------------------
 
 ///|
-fn parse_args(argv : Array[String]) -> (@src.ConnectOptions, String, String) raise {
+fn parse_args(
+  argv : Array[String],
+) -> (@src.ConnectOptions, String, String) raise {
   if argv.length() == 0 {
     raise CliError("missing user@host positional")
   }

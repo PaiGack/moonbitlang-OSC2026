@@ -188,7 +188,15 @@ pub fn PKey::from_rsa_components(
 ) -> PKey raise CryptoError {
   ensure_openssl()
   let out : Ref[Pkey] = Ref::new(pkey_new_ffi())
-  let rc = pkey_new_rsa_ffi(n, n.length(), e, e.length(), d_opt, d_opt.length(), out)
+  let rc = pkey_new_rsa_ffi(
+    n,
+    n.length(),
+    e,
+    e.length(),
+    d_opt,
+    d_opt.length(),
+    out,
+  )
   if rc != 1 {
     pkey_free_ffi(out.val)
     err_clear()
@@ -227,7 +235,10 @@ pub fn PKey::raw_public(self : PKey) -> Bytes raise CryptoError {
   let rc = pkey_get_raw_pub_ffi(self.ptr, arr, len)
   if rc != 1 {
     err_clear()
-    raise CryptoError::OperationFailed("EVP_PKEY_get_raw_public_key", err_get_error())
+    raise CryptoError::OperationFailed(
+      "EVP_PKEY_get_raw_public_key",
+      err_get_error(),
+    )
   }
   let view = FixedArray::makei(len.val, i => arr.unsafe_get(i))
   Bytes::from_fixedarray(view)
@@ -241,7 +252,10 @@ pub fn PKey::raw_private(self : PKey) -> Bytes raise CryptoError {
   let rc = pkey_get_raw_priv_ffi(self.ptr, arr, len)
   if rc != 1 {
     err_clear()
-    raise CryptoError::OperationFailed("EVP_PKEY_get_raw_private_key", err_get_error())
+    raise CryptoError::OperationFailed(
+      "EVP_PKEY_get_raw_private_key",
+      err_get_error(),
+    )
   }
   let view = FixedArray::makei(len.val, i => arr.unsafe_get(i))
   Bytes::from_fixedarray(view)
@@ -275,7 +289,14 @@ pub fn PKey::verify(
   data : Bytes,
   sig : Bytes,
 ) -> Bool raise CryptoError {
-  let rc = pkey_verify_ffi(self.ptr, md_alg, data, data.length(), sig, sig.length())
+  let rc = pkey_verify_ffi(
+    self.ptr,
+    md_alg,
+    data,
+    data.length(),
+    sig,
+    sig.length(),
+  )
   if rc < 0 {
     err_clear()
     raise CryptoError::OperationFailed("EVP_PKEY_verify", err_get_error())

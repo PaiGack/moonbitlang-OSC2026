@@ -1,6 +1,4 @@
 options(
   "native-stub": [ "socket.c" ],
-  targets: {
-    "socket.mbt": [ "native" ],
-  },
+  targets: { "socket.mbt": [ "native" ] },
 )

@@ -16,21 +16,49 @@
 ///|
 /// 通道消息类型。
 pub const MSG_CHANNEL_OPEN : Byte = b'\x5a' // 90
+
+///|
 pub const MSG_CHANNEL_OPEN_CONFIRMATION : Byte = b'\x5b' // 91
+
+///|
 pub const MSG_CHANNEL_OPEN_FAILURE : Byte = b'\x5c' // 92
+
+///|
 pub const MSG_CHANNEL_WINDOW_ADJUST : Byte = b'\x5d' // 93
+
+///|
 pub const MSG_CHANNEL_DATA : Byte = b'\x5e' // 94
+
+///|
 pub const MSG_CHANNEL_EXTENDED_DATA : Byte = b'\x7f' // 127
+
+///|
 pub const MSG_CHANNEL_EOF : Byte = b'\x5f' // 95
+
+///|
 pub const MSG_CHANNEL_CLOSE : Byte = b'\x60' // 96
+
+///|
 pub const MSG_CHANNEL_REQUEST : Byte = b'\x62' // 98
+
+///|
 pub const MSG_CHANNEL_SUCCESS : Byte = b'\x62' // 99
 
 ///|
 /// 请求类型名常量。
-pub fn request_type_exec() -> String { "exec" }
-pub fn request_type_shell() -> String { "shell" }
-pub fn request_type_env() -> String { "env" }
+pub fn request_type_exec() -> String {
+  "exec"
+}
+
+///|
+pub fn request_type_shell() -> String {
+  "shell"
+}
+
+///|
+pub fn request_type_env() -> String {
+  "env"
+}
 
 ///|
 pub struct Channel {
@@ -85,15 +113,29 @@ pub fn Channel::new(local_id : Int, session_id : Bytes) -> Channel {
 }
 
 ///|
-pub fn Channel::id(self : Channel) -> Int { self.id }
+pub fn Channel::id(self : Channel) -> Int {
+  self.id
+}
+
 ///|
-pub fn Channel::state(self : Channel) -> ChannelState { self.state }
+pub fn Channel::state(self : Channel) -> ChannelState {
+  self.state
+}
+
 ///|
-pub fn Channel::is_open(self : Channel) -> Bool { self.state == Open }
+pub fn Channel::is_open(self : Channel) -> Bool {
+  self.state == Open
+}
+
 ///|
-pub fn Channel::exit_status(self : Channel) -> Int? { self.exit_status }
+pub fn Channel::exit_status(self : Channel) -> Int? {
+  self.exit_status
+}
+
 ///|
-pub fn Channel::exit_signal(self : Channel) -> String? { self.exit_signal }
+pub fn Channel::exit_signal(self : Channel) -> String? {
+  self.exit_signal
+}
 
 // --- Wire format builders -------------------------------------------
 
@@ -242,12 +284,7 @@ pub fn Channel::handle_inbound(
       for b in data {
         self.stdout_buf.push(b)
       }
-      [
-        build_channel_window_adjust(
-          self.peer_id,
-          self.local_max_packet,
-        ),
-      ]
+      [build_channel_window_adjust(self.peer_id, self.local_max_packet)]
     }
     MSG_CHANNEL_EXTENDED_DATA => {
       let _sender = r.read_uint32()
@@ -268,15 +305,12 @@ pub fn Channel::handle_inbound(
       self.state = Done
       [build_channel_close(self.peer_id)]
     }
-    MSG_CHANNEL_REQUEST => {
-      handle_channel_request(self, r)
-    }
-    b'\x63' => {
+    MSG_CHANNEL_REQUEST => handle_channel_request(self, r)
+    b'\x63' =>
       // 99 = CHANNEL_SUCCESS
       // Reply to want_reply=true. For exec this just means: server
       // accepted the request. We stay in Open state.
       []
-    }
     b'\x64' => {
       // 100 = CHANNEL_FAILURE: server rejected our `exec` request.
       self.state = Done

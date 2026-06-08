@@ -32,7 +32,11 @@ pub struct ConnectOptions {
 }
 
 ///|
-pub fn ConnectOptions::new(host : String, port : Int, user : String) -> ConnectOptions {
+pub fn ConnectOptions::new(
+  host : String,
+  port : Int,
+  user : String,
+) -> ConnectOptions {
   {
     host,
     port,
@@ -52,7 +56,10 @@ pub fn ConnectOptions::with_host_key_verifier(
 }
 
 ///|
-pub fn ConnectOptions::with_banner(self : ConnectOptions, banner : String) -> ConnectOptions {
+pub fn ConnectOptions::with_banner(
+  self : ConnectOptions,
+  banner : String,
+) -> ConnectOptions {
   { ..self, client_banner: Some(banner) }
 }
 
@@ -104,7 +111,15 @@ pub fn Client::connect(opts : ConnectOptions) -> Client raise SshError {
   let v_s = @utf8.encode(banner_line)
   let kex = KexContext::new(v_c, v_s)
   let auth = AuthContext::new(opts.user)
-  { conn: Connected(conn), banner_client: client_banner, banner_server: banner_line, kex, auth, session_id: b"", next_channel_id: 0 }
+  {
+    conn: Connected(conn),
+    banner_client: client_banner,
+    banner_server: banner_line,
+    kex,
+    auth,
+    session_id: b"",
+    next_channel_id: 0,
+  }
 }
 
 ///|
@@ -112,10 +127,9 @@ pub fn Client::connect(opts : ConnectOptions) -> Client raise SshError {
 /// v0.1: stub — real implementation is `KexContext::drive` with the
 /// concrete transport; that loop is left as a TODO (Step 4.2).
 pub fn Client::kex(self : Client) -> Unit raise SshError {
-  self.kex.drive(
-    () => self.read_plain_packet(),
-    payload => self.write_plain_packet(payload),
-  )
+  self.kex.drive(() => self.read_plain_packet(), payload => {
+    self.write_plain_packet(payload)
+  })
   self.session_id = self.kex.session_id
 }
 
@@ -161,7 +175,9 @@ pub fn Client::exec(
   _channel : Channel,
   _command : String,
 ) -> String {
-  abort("Client::exec: not yet implemented (v0.1 stub — see docs/prd_001.md §Step 4.5)")
+  abort(
+    "Client::exec: not yet implemented (v0.1 stub — see docs/prd_001.md §Step 4.5)",
+  )
 }
 
 ///|
@@ -176,9 +192,7 @@ pub fn Client::close(self : Client) -> Unit {
 
 ///|
 fn read_line(conn : @socket.Tcp) -> String raise SshError {
-  let line = conn.read_line() catch {
-    e => raise IoError("read_line: \{e}")
-  }
+  let line = conn.read_line() catch { e => raise IoError("read_line: \{e}") }
   strip_line_ending(line)
 }
 
@@ -187,10 +201,11 @@ fn Client::read_plain_packet(self : Client) -> Bytes raise SshError {
   match self.conn {
     Connected(conn) =>
       read_packet(
-        size =>
+        size => {
           conn.read_exact(size) catch {
             e => raise IoError("read packet: \{e}")
-          },
+          }
+        },
         8,
         0,
         body => body,
@@ -200,7 +215,10 @@ fn Client::read_plain_packet(self : Client) -> Bytes raise SshError {
 }
 
 ///|
-fn Client::write_plain_packet(self : Client, payload : Bytes) -> Unit raise SshError {
+fn Client::write_plain_packet(
+  self : Client,
+  payload : Bytes,
+) -> Unit raise SshError {
   let packet = write_packet(payload, 8, false, _data => b"")
   match self.conn {
     Connected(conn) =>
@@ -214,7 +232,8 @@ fn Client::write_plain_packet(self : Client, payload : Bytes) -> Unit raise SshE
 fn strip_line_ending(line : String) -> String {
   let arr = line.to_array()
   let mut end = arr.length()
-  while end > 0 && (arr.unsafe_get(end - 1) == '\n' || arr.unsafe_get(end - 1) == '\r') {
+  while end > 0 &&
+        (arr.unsafe_get(end - 1) == '\n' || arr.unsafe_get(end - 1) == '\r') {
     end = end - 1
   }
   let sb = StringBuilder::new()

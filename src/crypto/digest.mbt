@@ -31,6 +31,7 @@ pub fn Algorithm::block_len(self : Algorithm) -> Int {
   }
 }
 
+///|
 fn alg_id(a : Algorithm) -> Int {
   match a {
     Sha1 => 1
@@ -110,7 +111,10 @@ pub fn Hasher::update(self : Hasher, data : Bytes) -> Unit raise CryptoError {
 }
 
 ///|
-pub fn Hasher::update_string(self : Hasher, s : String) -> Unit raise CryptoError {
+pub fn Hasher::update_string(
+  self : Hasher,
+  s : String,
+) -> Unit raise CryptoError {
   self.update(@utf8.encode(s))
 }
 
@@ -136,7 +140,13 @@ pub fn digest(alg : Algorithm, data : Bytes) -> Bytes raise CryptoError {
   ensure_openssl()
   let out_len_ref = Ref(0)
   let out = FixedArray::make(alg.output_len(), b'\x00')
-  let rc = digest_oneshot_ffi(alg_id(alg), data, data.length(), out, out_len_ref)
+  let rc = digest_oneshot_ffi(
+    alg_id(alg),
+    data,
+    data.length(),
+    out,
+    out_len_ref,
+  )
   if rc != 1 || out_len_ref.val != alg.output_len() {
     err_clear()
     raise CryptoError::OperationFailed("EVP_Digest", err_get_error())
