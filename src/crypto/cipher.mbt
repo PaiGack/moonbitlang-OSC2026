@@ -19,6 +19,36 @@ pub enum CipherAlgorithm {
 } derive(Eq, Show)
 
 ///|
+pub fn CipherAlgorithm::aes128_ctr() -> CipherAlgorithm {
+  Aes128Ctr
+}
+
+///|
+pub fn CipherAlgorithm::aes192_ctr() -> CipherAlgorithm {
+  Aes192Ctr
+}
+
+///|
+pub fn CipherAlgorithm::aes256_ctr() -> CipherAlgorithm {
+  Aes256Ctr
+}
+
+///|
+pub fn CipherAlgorithm::aes128_gcm() -> CipherAlgorithm {
+  Aes128Gcm
+}
+
+///|
+pub fn CipherAlgorithm::aes256_gcm() -> CipherAlgorithm {
+  Aes256Gcm
+}
+
+///|
+pub fn CipherAlgorithm::chacha20_poly1305() -> CipherAlgorithm {
+  ChaCha20Poly1305
+}
+
+///|
 pub fn CipherAlgorithm::id(self : CipherAlgorithm) -> Int {
   match self {
     Aes128Ctr => 1

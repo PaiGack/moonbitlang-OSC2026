@@ -446,6 +446,13 @@ pub struct KexContext {
   mut shared_secret : Bytes
   mut session_id : Bytes
   priv mut session_id_set : Bool
+  // Derived encryption keys (set after NEWKEYS)
+  mut iv_c2s : Bytes
+  mut iv_s2c : Bytes
+  mut enc_key_c2s : Bytes
+  mut enc_key_s2c : Bytes
+  mut mac_key_c2s : Bytes
+  mut mac_key_s2c : Bytes
 }
 
 ///|
@@ -470,6 +477,12 @@ pub fn KexContext::new(v_c : Bytes, v_s : Bytes) -> KexContext {
     shared_secret: b"",
     session_id: b"",
     session_id_set: false,
+    iv_c2s: b"",
+    iv_s2c: b"",
+    enc_key_c2s: b"",
+    enc_key_s2c: b"",
+    mac_key_c2s: b"",
+    mac_key_s2c: b"",
   }
 }
 
@@ -658,7 +671,29 @@ fn KexContext::drive_curve25519(
     raise ProtocolError("kex: expected SSH_MSG_NEWKEYS")
   }
 
+  // Derive session keys
   self.transition_to(InstallKeys)
+  let hash_alg = hash_algorithm_for_kex(self.kex_alg)
+  let (enc_key_len, iv_len, mac_key_len) = key_material_sizes(self.enc_alg, self.mac_alg)
+  let (iv_c2s, iv_s2c, ek_c2s, ek_s2c, mk_c2s, mk_s2c) = derive_keys(
+    hash_alg,
+    self.exchange_hash,
+    self.shared_secret,
+    self.session_id,
+    enc_key_len,
+    iv_len,
+    mac_key_len,
+  ) catch {
+    e => raise ProtocolError("kex: key derivation failed: \{e.message()}")
+  }
+
+  self.iv_c2s = iv_c2s
+  self.iv_s2c = iv_s2c
+  self.enc_key_c2s = ek_c2s
+  self.enc_key_s2c = ek_s2c
+  self.mac_key_c2s = mk_c2s
+  self.mac_key_s2c = mk_s2c
+
   self.transition_to(Done)
 }
 
@@ -766,4 +801,40 @@ fn parse_host_key_to_pkey(
   _blob : Bytes,
 ) -> @crypto.PKey raise SshError {
   raise ProtocolError("kex: host key parsing not available on Windows")
+}
+
+// --- Key material sizes for encryption algorithms -------------------
+
+///|
+/// Determine key material sizes (key_len, iv_len, mac_key_len) for the
+/// negotiated encryption and MAC algorithms.
+fn key_material_sizes(enc_alg : String, mac_alg : String) -> (Int, Int, Int) {
+  let (key_len, iv_len) = match enc_alg {
+    "aes128-ctr" => (16, 16)
+    "aes192-ctr" => (24, 16)
+    "aes256-ctr" => (32, 16)
+    "aes128-gcm@openssh.com" => (16, 12)
+    "aes256-gcm@openssh.com" => (32, 12)
+    "chacha20-poly1305@openssh.com" => (64, 0) // ChaCha20-Poly1305 uses separate keys
+    _ => (32, 16) // default fallback
+  }
+
+  let mac_key_len = if is_aead_cipher(enc_alg) {
+    0  // AEAD ciphers don't need separate MAC
+  } else {
+    match mac_alg {
+      "hmac-sha1" => 20
+      "hmac-sha2-256" => 32
+      "hmac-sha2-512" => 64
+      _ => 32  // default
+    }
+  }
+
+  (key_len, iv_len, mac_key_len)
+}
+
+///|
+fn is_aead_cipher(alg : String) -> Bool {
+  alg == "aes128-gcm@openssh.com" || alg == "aes256-gcm@openssh.com" ||
+  alg == "chacha20-poly1305@openssh.com"
 }

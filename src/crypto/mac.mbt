@@ -11,6 +11,26 @@ pub enum MacAlgorithm {
 } derive(Eq, Show)
 
 ///|
+pub fn MacAlgorithm::hmac_sha1() -> MacAlgorithm {
+  HmacSha1
+}
+
+///|
+pub fn MacAlgorithm::hmac_sha256() -> MacAlgorithm {
+  HmacSha256
+}
+
+///|
+pub fn MacAlgorithm::hmac_sha384() -> MacAlgorithm {
+  HmacSha384
+}
+
+///|
+pub fn MacAlgorithm::hmac_sha512() -> MacAlgorithm {
+  HmacSha512
+}
+
+///|
 pub fn MacAlgorithm::output_len(self : MacAlgorithm) -> Int {
   match self {
     HmacSha1 => 20
