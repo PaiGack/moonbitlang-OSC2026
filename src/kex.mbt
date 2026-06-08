@@ -638,9 +638,132 @@ fn KexContext::drive_curve25519(
     self.session_id_set = true
   }
   self.transition_to(ComputingHash)
-  let _sig = parse_signature_blob(reply.signature)
-  raise ProtocolError(
-    "kex: host key signature verification is not implemented after " +
-    "Curve25519 exchange hash computation",
+
+  // Verify host key signature
+  let sig_blob = parse_signature_blob(reply.signature)
+  verify_host_key_signature(
+    host_key_alg,
+    reply.host_key,
+    self.exchange_hash,
+    sig_blob,
   )
+
+  // Send NEWKEYS
+  self.transition_to(ReadyForNewKeys)
+  write_packet(build_newkeys_payload())
+
+  // Read server's NEWKEYS
+  let newkeys_payload = read_packet()
+  if !is_newkeys_payload(newkeys_payload) {
+    raise ProtocolError("kex: expected SSH_MSG_NEWKEYS")
+  }
+
+  self.transition_to(InstallKeys)
+  self.transition_to(Done)
+}
+
+// --- Host key parsing and signature verification ------------------------
+
+///|
+/// Verify the server's host key signature over the exchange hash.
+#cfg(not(platform="windows"))
+fn verify_host_key_signature(
+  alg : String,
+  host_key_blob : Bytes,
+  exchange_hash : Bytes,
+  sig_blob : SignatureBlob,
+) -> Unit raise SshError {
+  let pkey = parse_host_key_to_pkey(alg, host_key_blob)
+  defer pkey.close()
+
+  // Determine the digest algorithm for the signature
+  let md_alg = match sig_blob.alg {
+    "ssh-ed25519" => 0  // Ed25519 uses its own digest
+    "rsa-sha2-256" => 4  // SHA-256
+    "rsa-sha2-512" => 5  // SHA-512
+    "ssh-rsa" => 2       // SHA-1 (legacy)
+    "ecdsa-sha2-nistp256" => 4  // SHA-256
+    _ => raise ProtocolError("kex: unsupported signature algorithm \{sig_blob.alg}")
+  }
+
+  let valid = pkey.verify(md_alg, exchange_hash, sig_blob.sig) catch {
+    e => raise ProtocolError("kex: signature verification failed: \{e.message()}")
+  }
+
+  if !valid {
+    raise ProtocolError("kex: host key signature is invalid")
+  }
+}
+
+///|
+/// Parse an SSH host key blob into a PKey.
+/// Format depends on the algorithm:
+///   - ssh-ed25519: string "ssh-ed25519" + string pubkey (32 bytes)
+///   - ssh-rsa / rsa-sha2-*: string "ssh-rsa" + string e + string n
+///   - ecdsa-sha2-nistp256: string "ecdsa-sha2-nistp256" + string "nistp256" + string Q
+#cfg(not(platform="windows"))
+fn parse_host_key_to_pkey(
+  alg : String,
+  blob : Bytes,
+) -> @crypto.PKey raise SshError {
+  let r = Reader::new(blob)
+  let key_type = r.read_string_as_str()
+  if key_type != alg {
+    raise ProtocolError("kex: host key type mismatch: expected \{alg}, got \{key_type}")
+  }
+
+  match alg {
+    "ssh-ed25519" => {
+      let pubkey = r.read_string()
+      if pubkey.length() != 32 {
+        raise ProtocolError("kex: ed25519 public key must be 32 bytes")
+      }
+      @crypto.PKey::from_raw(@crypto.KeyType::Ed25519, pubkey) catch {
+        e => raise ProtocolError("kex: failed to load ed25519 key: \{e.message()}")
+      }
+    }
+    "ssh-rsa" | "rsa-sha2-256" | "rsa-sha2-512" => {
+      let e = r.read_string()
+      let n = r.read_string()
+      @crypto.PKey::from_rsa_components(n, e) catch {
+        e => raise ProtocolError("kex: failed to load RSA key: \{e.message()}")
+      }
+    }
+    "ecdsa-sha2-nistp256" => {
+      let curve_name = r.read_string_as_str()
+      if curve_name != "nistp256" {
+        raise ProtocolError("kex: expected nistp256, got \{curve_name}")
+      }
+      let q = r.read_string()
+      // Q is encoded as 0x04 || X || Y (65 bytes for P-256)
+      if q.length() != 65 || q.unsafe_get(0) != b'\x04' {
+        raise ProtocolError("kex: invalid EC point encoding")
+      }
+      // OpenSSL expects the full point encoding
+      @crypto.PKey::from_raw(@crypto.KeyType::EcP256, q) catch {
+        e => raise ProtocolError("kex: failed to load ECDSA key: \{e.message()}")
+      }
+    }
+    _ => raise ProtocolError("kex: unsupported host key algorithm \{alg}")
+  }
+}
+
+///|
+#cfg(platform="windows")
+fn verify_host_key_signature(
+  _alg : String,
+  _host_key_blob : Bytes,
+  _exchange_hash : Bytes,
+  _sig_blob : SignatureBlob,
+) -> Unit raise SshError {
+  raise ProtocolError("kex: signature verification not available on Windows")
+}
+
+///|
+#cfg(platform="windows")
+fn parse_host_key_to_pkey(
+  _alg : String,
+  _blob : Bytes,
+) -> @crypto.PKey raise SshError {
+  raise ProtocolError("kex: host key parsing not available on Windows")
 }
