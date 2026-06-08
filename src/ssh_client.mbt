@@ -81,7 +81,7 @@ pub fn Client::default_banner() -> String {
 ///|
 /// Connect to an SSH server and complete the banner exchange.
 /// Does NOT yet run KEX or auth; call `kex` and `auth_*` afterwards.
-pub async fn Client::connect(opts : ConnectOptions) -> Client raise SshError {
+pub fn Client::connect(opts : ConnectOptions) -> Client raise SshError {
   let conn = @socket.Tcp::connect_to_host(opts.host, port=opts.port) catch {
     e => raise IoError("connect: \{e}")
   }
@@ -111,23 +111,23 @@ pub async fn Client::connect(opts : ConnectOptions) -> Client raise SshError {
 /// Run the SSH key exchange (KEXINIT / KEXDH / NEWKEYS).
 /// v0.1: stub — real implementation is `KexContext::drive` with the
 /// concrete transport; that loop is left as a TODO (Step 4.2).
-pub async fn Client::kex(self : Client) -> Unit raise SshError {
+pub fn Client::kex(self : Client) -> Unit raise SshError {
   self.kex.drive(stub_read, stub_write)
 }
 
 ///|
-async fn stub_read() -> Bytes raise SshError {
+fn stub_read() -> Bytes raise SshError {
   b""
 }
 
 ///|
-async fn stub_write(_b : Bytes) -> Unit raise SshError {
+fn stub_write(_b : Bytes) -> Unit raise SshError {
   ()
 }
 
 ///|
 /// Authenticate with a password.
-pub async fn Client::auth_password(
+pub fn Client::auth_password(
   self : Client,
   password : String,
 ) -> Unit raise SshError {
@@ -138,7 +138,7 @@ pub async fn Client::auth_password(
 
 ///|
 /// Authenticate with a public key.
-pub async fn Client::auth_publickey(
+pub fn Client::auth_publickey(
   self : Client,
   _key : Bytes,
   _signature : Bytes,
@@ -158,7 +158,7 @@ pub fn Client::open_session(self : Client) -> Channel {
 ///|
 /// Send an `exec` request and read the resulting stdout / exit-status.
 /// v0.1: stub — needs the full transport + channel pump.
-pub async fn Client::exec(
+pub fn Client::exec(
   _self : Client,
   _channel : Channel,
   _command : String,
@@ -177,7 +177,7 @@ pub fn Client::close(self : Client) -> Unit {
 // --- Internal helpers -----------------------------------------------
 
 ///|
-async fn read_line(_conn : @socket.Tcp) -> String raise SshError {
+fn read_line(_conn : @socket.Tcp) -> String raise SshError {
   // TODO(Step 4.7): proper line-reading. v0.1 reads a fixed buffer.
   // The actual reader needs to handle \r\n line endings and the SSH
   // maximum banner length.

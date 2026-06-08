@@ -393,10 +393,10 @@ pub fn KexContext::transition_to(self : KexContext, s : KexState) -> Unit {
 /// 4. For DH group14: same with the OpenSSL-backed BN_mod_exp
 /// 5. Compute exchange hash, derive keys, send NEWKEYS
 /// 6. On the server's NEWKEYS, atomically install the new keys
-pub async fn KexContext::drive(
+pub fn KexContext::drive(
   self : KexContext,
-  read_packet : async () -> Bytes raise SshError,
-  write_packet : async (Bytes) -> Unit raise SshError,
+  read_packet : () -> Bytes raise SshError,
+  write_packet : (Bytes) -> Unit raise SshError,
 ) -> Unit raise SshError {
   // TODO(Step 4.2): implement the full state machine. This is intentionally
   // a stub — it advances the state to `Done` but does not perform any

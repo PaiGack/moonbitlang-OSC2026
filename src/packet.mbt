@@ -242,8 +242,8 @@ pub const MAX_PACKET : Int = 256 * 1024
 ///   - `mac_size`: expected MAC size in bytes (0 if unencrypted or AEAD)
 ///   - `decrypt`: CTR-style decryption for body
 ///   - `verify_mac`: verify the MAC tag; raise `MacMismatch` on failure
-pub async fn read_packet(
-  read_exact : async (Int) -> Bytes raise SshError,
+pub fn read_packet(
+  read_exact : (Int) -> Bytes raise SshError,
   block_size : Int,
   mac_size : Int,
   decrypt : (Bytes) -> Bytes raise SshError,

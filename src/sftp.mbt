@@ -130,19 +130,19 @@ pub fn Sftp::version(self : Sftp) -> Int { self.version }
 
 ///|
 /// Read the entire contents of a remote file (v0.1: stub).
-pub async fn Sftp::read_all(_self : Sftp, _path : String) -> Bytes {
+pub fn Sftp::read_all(_self : Sftp, _path : String) -> Bytes {
   abort("Sftp::read_all: not yet implemented (v0.1 stub)")
 }
 
 ///|
 /// Write the entire contents to a remote file (v0.1: stub).
-pub async fn Sftp::write_all(_self : Sftp, _path : String, _data : Bytes) -> Unit {
+pub fn Sftp::write_all(_self : Sftp, _path : String, _data : Bytes) -> Unit {
   abort("Sftp::write_all: not yet implemented (v0.1 stub)")
 }
 
 ///|
 /// List a directory (v0.1: stub).
-pub async fn Sftp::list_dir(_self : Sftp, _path : String) -> Array[String] {
+pub fn Sftp::list_dir(_self : Sftp, _path : String) -> Array[String] {
   abort("Sftp::list_dir: not yet implemented (v0.1 stub)")
 }
 

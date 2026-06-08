@@ -12,14 +12,12 @@
 ///   - 仅支持 `password` 认证（公钥认证见 `docs/prd_001.md` Step 4.3）
 ///   - 协议层多个函数是 stub：若需真连接，请先实现 KEX / auth / channel
 ///     的完整版本（`src/kex.mbt`、`src/auth.mbt`、`src/channel.mbt`）。
-async fn main {
+fn main {
   let argv = get_argv()
   let (opts, password, command) = parse_args(argv) catch {
     msg => {
-      @stdio.stderr.write("error: " + msg.to_string() + "\n")
-      @stdio.stderr.write(
-        "usage: moon run cmd/main -- user@host [--port 22] [--exec CMD] [--password PWD]\n",
-      )
+      println("error: " + msg.to_string())
+      println("usage: moon run cmd/main -- user@host [--port 22] [--exec CMD] [--password PWD]")
       abort("invalid arguments")
     }
   }
@@ -35,8 +33,7 @@ async fn main {
   }
   let ch = client.open_session()
   let output = client.exec(ch, command)
-  @stdio.stdout.write(output)
-  @stdio.stdout.write("\n")
+  println(output)
 }
 
 // --- argv from environment ------------------------------------------

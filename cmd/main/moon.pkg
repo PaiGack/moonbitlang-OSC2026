@@ -1,6 +1,4 @@
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/stdio",
   "moonbitlang/core/argparse",
   "moonbitlang/core/env",
   "PaiGack/ssh_client/src",
