@@ -4,6 +4,8 @@
  */
 
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <moonbit.h>
 
@@ -14,6 +16,18 @@
 #pragma comment(lib, "ws2_32.lib")
 
 static int winsock_initialized = 0;
+
+static int send_all(SOCKET sock, const char *buffer, int data_len) {
+    int sent = 0;
+    while (sent < data_len) {
+        int result = send(sock, buffer + sent, data_len - sent, 0);
+        if (result == SOCKET_ERROR || result == 0) {
+            return -1;
+        }
+        sent += result;
+    }
+    return sent;
+}
 
 /*
  * Initialize Winsock2
@@ -112,14 +126,16 @@ int socket_send(int handle, moonbit_string_t data_str) {
     }
 
     SOCKET sock = (SOCKET)handle;
-    int result = send(sock, buffer, data_len, 0);
+    int result = send_all(sock, buffer, data_len);
     free(buffer);
 
-    if (result == SOCKET_ERROR) {
-        return -1;
-    }
-
     return result;
+}
+
+int socket_send_bytes(int handle, moonbit_bytes_t data, int data_len) {
+    SOCKET sock = (SOCKET)handle;
+    const char *buffer = (const char *)Moonbit_bytes_ptr(data);
+    return send_all(sock, buffer, data_len);
 }
 
 /*
@@ -154,6 +170,35 @@ void socket_close(int handle) {
 #include <netdb.h>
 #include <unistd.h>
 
+static int send_all(int sock, const char *buffer, int data_len) {
+    int sent = 0;
+    while (sent < data_len) {
+        int result = (int)send(sock, buffer + sent, (size_t)(data_len - sent), 0);
+        if (result <= 0) {
+            return -1;
+        }
+        sent += result;
+    }
+    return sent;
+}
+
+static char *moonbit_string_to_ascii(moonbit_string_t s, int *len_out) {
+    int len = Moonbit_string_length(s);
+    char *out = (char *)malloc((size_t)len + 1);
+    if (!out) {
+        return 0;
+    }
+    const uint16_t *src = (const uint16_t *)Moonbit_string_ptr(s);
+    for (int i = 0; i < len; i++) {
+        out[i] = (char)src[i];
+    }
+    out[len] = '\0';
+    if (len_out) {
+        *len_out = len;
+    }
+    return out;
+}
+
 int socket_init(void) {
     return 0;  // No initialization needed on Unix
 }
@@ -163,18 +208,58 @@ int socket_create(void) {
 }
 
 int socket_connect(int handle, moonbit_string_t host_str, int port) {
-    // TODO: Implement Unix version
-    return -1;
+    int host_len = 0;
+    char *host = moonbit_string_to_ascii(host_str, &host_len);
+    (void)host_len;
+    if (!host) {
+        return -1;
+    }
+
+    char port_buf[16];
+    snprintf(port_buf, sizeof(port_buf), "%d", port);
+
+    struct addrinfo hints;
+    struct addrinfo *result = 0;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    int rc = getaddrinfo(host, port_buf, &hints, &result);
+    free(host);
+    if (rc != 0) {
+        return rc;
+    }
+
+    int connected = -1;
+    for (struct addrinfo *rp = result; rp != 0; rp = rp->ai_next) {
+        if (connect(handle, rp->ai_addr, rp->ai_addrlen) == 0) {
+            connected = 0;
+            break;
+        }
+    }
+    freeaddrinfo(result);
+    return connected;
 }
 
 int socket_send(int handle, moonbit_string_t data_str) {
-    // TODO: Implement Unix version
-    return -1;
+    int data_len = 0;
+    char *buffer = moonbit_string_to_ascii(data_str, &data_len);
+    if (!buffer) {
+        return -1;
+    }
+    int result = send_all(handle, buffer, data_len);
+    free(buffer);
+    return result;
+}
+
+int socket_send_bytes(int handle, moonbit_bytes_t data, int data_len) {
+    const char *buffer = (const char *)Moonbit_bytes_ptr(data);
+    return send_all(handle, buffer, data_len);
 }
 
 int socket_recv(int handle, moonbit_bytes_t buffer, int offset, int size) {
-    // TODO: Implement Unix version
-    return -1;
+    uint8_t *buf_ptr = (uint8_t *)Moonbit_bytes_ptr(buffer);
+    return (int)recv(handle, (char *)(buf_ptr + offset), (size_t)size, 0);
 }
 
 void socket_close(int handle) {

@@ -29,6 +29,11 @@ extern "C" fn socket_connect(handle : Int, host : String, port : Int) -> Int = "
 extern "C" fn socket_send(handle : Int, data : String) -> Int = "socket_send"
 
 ///|
+/// Send raw bytes through socket
+#borrow(data)
+extern "C" fn socket_send_bytes(handle : Int, data : Bytes, len : Int) -> Int = "socket_send_bytes"
+
+///|
 /// Receive data from socket into buffer starting at offset
 #borrow(buffer)
 extern "C" fn socket_recv(handle : Int, buffer : Bytes, offset : Int, size : Int) -> Int = "socket_recv"
@@ -72,6 +77,15 @@ pub fn Tcp::write(self : Tcp, data : String) -> Unit raise {
 }
 
 ///|
+/// Write raw bytes to the connection.
+pub fn Tcp::write_bytes(self : Tcp, data : Bytes) -> Unit raise {
+  let result = socket_send_bytes(self.handle, data, data.length())
+  if result < 0 {
+    raise IoError("Failed to send bytes: error code \{result}")
+  }
+}
+
+///|
 /// Read a line from the connection (reads until \n or \r\n)
 pub fn Tcp::read_line(self : Tcp) -> String raise {
   let buffer = Bytes::new(4096)
@@ -100,14 +114,8 @@ pub fn Tcp::read_line(self : Tcp) -> String raise {
     raise IoError("No data read")
   }
 
-  // Convert bytes to string (only use the bytes we read)
-  // Create a new string from the bytes we read
-  let result = Bytes::new(total_read)
-  let mut i = 0
-  while i < total_read {
-    result[i] = buffer[i]
-    i = i + 1
-  }
+  // Convert only the bytes actually read into a line string.
+  let result = Bytes::makei(total_read, i => buffer[i])
   result.to_string()
 }
 

@@ -64,7 +64,7 @@ pub struct Client {
   priv banner_server : String
   priv kex : KexContext
   priv auth : AuthContext
-  priv session_id : Bytes
+  priv mut session_id : Bytes
   mut next_channel_id : Int
 }
 
@@ -100,8 +100,8 @@ pub fn Client::connect(opts : ConnectOptions) -> Client raise SshError {
   if not(banner_line.has_prefix("SSH-")) {
     raise ProtocolError("server banner missing SSH- prefix: \{banner_line}")
   }
-  let v_c = @utf8.encode("\{client_banner}\r\n")
-  let v_s = @utf8.encode("\{banner_line}\r\n")
+  let v_c = @utf8.encode(client_banner)
+  let v_s = @utf8.encode(banner_line)
   let kex = KexContext::new(v_c, v_s)
   let auth = AuthContext::new(opts.user)
   { conn: Connected(conn), banner_client: client_banner, banner_server: banner_line, kex, auth, session_id: b"", next_channel_id: 0 }
@@ -112,17 +112,11 @@ pub fn Client::connect(opts : ConnectOptions) -> Client raise SshError {
 /// v0.1: stub — real implementation is `KexContext::drive` with the
 /// concrete transport; that loop is left as a TODO (Step 4.2).
 pub fn Client::kex(self : Client) -> Unit raise SshError {
-  self.kex.drive(stub_read, stub_write)
-}
-
-///|
-fn stub_read() -> Bytes raise SshError {
-  b""
-}
-
-///|
-fn stub_write(_b : Bytes) -> Unit raise SshError {
-  ()
+  self.kex.drive(
+    () => self.read_plain_packet(),
+    payload => self.write_plain_packet(payload),
+  )
+  self.session_id = self.kex.session_id
 }
 
 ///|
@@ -131,9 +125,11 @@ pub fn Client::auth_password(
   self : Client,
   password : String,
 ) -> Unit raise SshError {
-  ignore(self.auth.build_password(password))
-  // TODO(Step 4.3): wire to the transport; wait for `Success` reply.
-  self.auth.apply_reply(Success)
+  ignore(password)
+  if self.kex.state != Done {
+    raise ProtocolError("auth_password: key exchange is not complete")
+  }
+  raise NotEncrypted
 }
 
 ///|
@@ -143,8 +139,10 @@ pub fn Client::auth_publickey(
   _key : Bytes,
   _signature : Bytes,
 ) -> Unit raise SshError {
-  // TODO(Step 4.3): wire to the transport.
-  self.auth.apply_reply(Success)
+  if self.kex.state != Done {
+    raise ProtocolError("auth_publickey: key exchange is not complete")
+  }
+  raise NotEncrypted
 }
 
 ///|
@@ -169,17 +167,59 @@ pub fn Client::exec(
 ///|
 /// Close the SSH connection cleanly (sends DISCONNECT if possible).
 pub fn Client::close(self : Client) -> Unit {
-  // TODO(Step 4.7): send SSH_MSG_DISCONNECT (type 1) before closing the
-  // transport. v0.1 just drops the connection.
-  ignore(self)
+  match self.conn {
+    Connected(conn) => conn.close()
+  }
 }
 
 // --- Internal helpers -----------------------------------------------
 
 ///|
-fn read_line(_conn : @socket.Tcp) -> String raise SshError {
-  // TODO(Step 4.7): proper line-reading. v0.1 reads a fixed buffer.
-  // The actual reader needs to handle \r\n line endings and the SSH
-  // maximum banner length.
-  raise IoError("read_line: not yet implemented")
+fn read_line(conn : @socket.Tcp) -> String raise SshError {
+  let line = conn.read_line() catch {
+    e => raise IoError("read_line: \{e}")
+  }
+  strip_line_ending(line)
+}
+
+///|
+fn Client::read_plain_packet(self : Client) -> Bytes raise SshError {
+  match self.conn {
+    Connected(conn) =>
+      read_packet(
+        size =>
+          conn.read_exact(size) catch {
+            e => raise IoError("read packet: \{e}")
+          },
+        8,
+        0,
+        body => body,
+        (_data, _mac) => (),
+      )
+  }
+}
+
+///|
+fn Client::write_plain_packet(self : Client, payload : Bytes) -> Unit raise SshError {
+  let packet = write_packet(payload, 8, false, _data => b"")
+  match self.conn {
+    Connected(conn) =>
+      conn.write_bytes(packet) catch {
+        e => raise IoError("write packet: \{e}")
+      }
+  }
+}
+
+///|
+fn strip_line_ending(line : String) -> String {
+  let arr = line.to_array()
+  let mut end = arr.length()
+  while end > 0 && (arr.unsafe_get(end - 1) == '\n' || arr.unsafe_get(end - 1) == '\r') {
+    end = end - 1
+  }
+  let sb = StringBuilder::new()
+  for i in 0..<end {
+    sb.write_char(arr.unsafe_get(i))
+  }
+  sb.to_string()
 }

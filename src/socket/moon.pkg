@@ -1,5 +1,5 @@
-// Socket module package configuration
 options(
+  "native-stub": [ "socket.c" ],
   targets: {
     "socket.mbt": [ "native" ],
   },

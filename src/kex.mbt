@@ -332,15 +332,15 @@ pub enum KexState {
 /// implemented by callers; this struct only tracks state.
 pub struct KexContext {
   mut state : KexState
-  kex_alg : String
-  host_key_alg : String
-  enc_alg : String
-  mac_alg : String
-  comp_alg : String
+  mut kex_alg : String
+  mut host_key_alg : String
+  mut enc_alg : String
+  mut mac_alg : String
+  mut comp_alg : String
   v_c : Bytes
   v_s : Bytes
   i_c : Bytes
-  i_s : Bytes
+  mut i_s : Bytes
   cookie : Bytes
   priv ephemeral : @crypto.PKey?
   priv peer_host_key : Bytes
@@ -403,7 +403,39 @@ pub fn KexContext::drive(
   // actual KEX. The packet framing, crypto primitives, and algorithm
   // registry are all in place; the missing piece is the I/O loop that
   // threads them together.
-  ignore(read_packet)
-  ignore(write_packet)
-  self.transition_to(Done)
+  if self.state != Initial {
+    raise ProtocolError("kex: invalid state \{self.state}")
+  }
+  write_packet(self.i_c)
+  self.transition_to(SentKexinit)
+  let server_kexinit = read_packet()
+  self.i_s = server_kexinit
+  let server = parse_kexinit(server_kexinit)
+  self.transition_to(Negotiating)
+  self.kex_alg = require_algorithm("kex", server.first(kex_algorithms()))
+  self.host_key_alg = require_algorithm(
+    "host key",
+    server.first_host_key(server_host_key_algorithms()),
+  )
+  self.enc_alg = require_algorithm(
+    "encryption",
+    server.first_enc(encryption_algorithms()),
+  )
+  self.mac_alg = require_algorithm("mac", server.first_mac(mac_algorithms()))
+  self.comp_alg = require_algorithm(
+    "compression",
+    server.first_comp(compression_algorithms()),
+  )
+  self.transition_to(SentDhInit)
+  raise ProtocolError(
+    "kex: KEXDH/ECDH exchange is not implemented after KEXINIT negotiation",
+  )
+}
+
+///|
+fn require_algorithm(kind : String, value : String?) -> String raise SshError {
+  match value {
+    Some(alg) => alg
+    None => raise ProtocolError("kex: no matching \{kind} algorithm")
+  }
 }

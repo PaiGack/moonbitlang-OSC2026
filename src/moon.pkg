@@ -14,5 +14,6 @@ options(
     "channel.mbt": [ "native" ],
     "sftp.mbt": [ "native" ],
     "ssh_client.mbt": [ "native" ],
+    "kex_wbtest.mbt": [ "native" ],
   },
 )
