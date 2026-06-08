@@ -11,7 +11,7 @@ pub struct Tcp {
 
 ///|
 /// Connect to a remote host
-pub fn Tcp::connect_to_host(host : String, ~port : Int) -> Tcp raise {
+pub fn Tcp::connect_to_host(host : String, port~ : Int) -> Tcp raise {
   // TODO: Implement real TCP connection
   // For now, this is a stub that just stores the connection info
   { host, port }
@@ -45,4 +45,4 @@ pub fn Tcp::close(self : Tcp) -> Unit {
 /// IO error type
 pub suberror IoError {
   IoError(String)
-} derive(Eq, Show)
+} derive(Eq, Debug)
