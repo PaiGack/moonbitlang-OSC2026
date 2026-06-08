@@ -14,6 +14,16 @@ pub enum Algorithm {
 } derive(Eq, Show)
 
 ///|
+pub fn Algorithm::sha1() -> Algorithm {
+  Sha1
+}
+
+///|
+pub fn Algorithm::sha256() -> Algorithm {
+  Sha256
+}
+
+///|
 pub fn Algorithm::output_len(self : Algorithm) -> Int {
   match self {
     Sha1 => 20

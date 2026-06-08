@@ -47,24 +47,23 @@ pub fn compression_algorithms() -> Array[String] {
 }
 
 ///|
-/// KEXINIT payload (per RFC 4253 §7.1):
-///   byte         SSH_MSG_KEXINIT (20)
-///   byte[16]     cookie (random)
-///   name-list    kex_algorithms
-///   name-list    server_host_key_algorithms
-///   name-list    encryption_algorithms_client_to_server
-///   name-list    encryption_algorithms_server_to_client
-///   name-list    mac_algorithms_client_to_server
-///   name-list    mac_algorithms_server_to_client
-///   name-list    compression_algorithms_client_to_server
-///   name-list    compression_algorithms_server_to_client
-///   name-list    languages_client_to_server
-///   name-list    languages_server_to_client
-///   boolean      first_kex_packet_follows
-///   uint32       0 (reserved)
+/// SSH transport message numbers used during key exchange.
+pub const SSH_MSG_KEXINIT : Byte = b'\x14'
+
+///|
+pub const SSH_MSG_NEWKEYS : Byte = b'\x15'
+
+///|
+pub const SSH_MSG_KEX_ECDH_INIT : Byte = b'\x1e'
+
+///|
+pub const SSH_MSG_KEX_ECDH_REPLY : Byte = b'\x1f'
+
+///|
+/// Build a SSH_MSG_KEXINIT payload.
 pub fn build_kexinit_payload(cookie : Bytes) -> Bytes {
   let w = Writer::new()
-  w.write_byte(20) // SSH_MSG_KEXINIT
+  w.write_byte(SSH_MSG_KEXINIT)
   w.write_bytes(cookie)
   w.write_name_list(kex_algorithms())
   w.write_name_list(server_host_key_algorithms())
@@ -86,7 +85,7 @@ pub fn build_kexinit_payload(cookie : Bytes) -> Bytes {
 pub fn parse_kexinit(payload : Bytes) -> KexInit raise SshError {
   let r = Reader::new(payload)
   let msg = r.read_byte()
-  if msg != b'\x14' {
+  if msg != SSH_MSG_KEXINIT {
     raise ProtocolError("expected SSH_MSG_KEXINIT, got \{msg.to_int()}")
   }
   let cookie = r.read_bytes(16)
@@ -191,10 +190,72 @@ pub fn KexInit::first_comp(self : KexInit, ours : Array[String]) -> String? {
 // --- Key derivation (RFC 4253 §7.2) ----------------------------------
 
 ///|
-/// Compute the SSH exchange hash `H = hash(V_C || V_S || I_C || I_S || K_S || e || f || K)`.
-/// `v_c` / `v_s` are the SSH version strings; `i_c` / `i_s` are the KEXINIT
-/// payloads; `k_s` is the server host key blob; `e` / `f` are the DH/ECDH
-/// public values; `k` is the shared secret (mpint).
+/// Build SSH_MSG_KEX_ECDH_INIT for curve25519-sha256 and ecdh-sha2-*.
+pub fn build_ecdh_init_payload(client_public : Bytes) -> Bytes {
+  let w = Writer::new()
+  w.write_byte(SSH_MSG_KEX_ECDH_INIT)
+  w.write_string(client_public)
+  w.to_bytes()
+}
+
+///|
+pub struct EcdhReply {
+  host_key : Bytes
+  server_public : Bytes
+  signature : Bytes
+}
+
+///|
+pub fn parse_ecdh_reply_payload(payload : Bytes) -> EcdhReply raise SshError {
+  let r = Reader::new(payload)
+  let msg = r.read_byte()
+  if msg != SSH_MSG_KEX_ECDH_REPLY {
+    raise ProtocolError("expected SSH_MSG_KEX_ECDH_REPLY, got \{msg.to_int()}")
+  }
+  let host_key = r.read_string()
+  let server_public = r.read_string()
+  let signature = r.read_string()
+  if !r.eof() {
+    raise ParseError("ecdh reply: trailing bytes")
+  }
+  { host_key, server_public, signature }
+}
+
+///|
+pub struct SignatureBlob {
+  alg : String
+  sig : Bytes
+}
+
+///|
+pub fn parse_signature_blob(blob : Bytes) -> SignatureBlob raise SshError {
+  let r = Reader::new(blob)
+  let alg = r.read_string_as_str()
+  let sig = r.read_string()
+  if !r.eof() {
+    raise ParseError("signature blob: trailing bytes")
+  }
+  { alg, sig }
+}
+
+///|
+pub fn parse_host_key_algorithm(blob : Bytes) -> String raise SshError {
+  let r = Reader::new(blob)
+  r.read_string_as_str()
+}
+
+///|
+pub fn build_newkeys_payload() -> Bytes {
+  b"\x15"
+}
+
+///|
+pub fn is_newkeys_payload(payload : Bytes) -> Bool {
+  payload.length() == 1 && payload.unsafe_get(0) == SSH_MSG_NEWKEYS
+}
+
+///|
+/// Compute the SSH DH exchange hash.
 pub fn compute_exchange_hash(
   hash_alg : @crypto.Algorithm,
   v_c : Bytes,
@@ -207,15 +268,47 @@ pub fn compute_exchange_hash(
   k : Bytes,
 ) -> Bytes raise @crypto.CryptoError {
   let h = @crypto.Hasher::new(hash_alg)
-  h.update(v_c)
-  h.update(v_s)
-  h.update(i_c)
-  h.update(i_s)
-  h.update(k_s)
+  update_exchange_hash_prefix(h, v_c, v_s, i_c, i_s, k_s)
   h.update(encode_mpint_of_bytes(e))
   h.update(encode_mpint_of_bytes(f))
   h.update(encode_mpint_of_bytes(k))
   h.finalize()
+}
+
+///|
+pub fn compute_ecdh_exchange_hash(
+  hash_alg : @crypto.Algorithm,
+  v_c : Bytes,
+  v_s : Bytes,
+  i_c : Bytes,
+  i_s : Bytes,
+  k_s : Bytes,
+  q_c : Bytes,
+  q_s : Bytes,
+  k : Bytes,
+) -> Bytes raise @crypto.CryptoError {
+  let h = @crypto.Hasher::new(hash_alg)
+  update_exchange_hash_prefix(h, v_c, v_s, i_c, i_s, k_s)
+  h.update(encode_string(q_c))
+  h.update(encode_string(q_s))
+  h.update(encode_mpint_of_bytes(k))
+  h.finalize()
+}
+
+///|
+fn update_exchange_hash_prefix(
+  h : @crypto.Hasher,
+  v_c : Bytes,
+  v_s : Bytes,
+  i_c : Bytes,
+  i_s : Bytes,
+  k_s : Bytes,
+) -> Unit raise @crypto.CryptoError {
+  h.update(encode_string(v_c))
+  h.update(encode_string(v_s))
+  h.update(encode_string(i_c))
+  h.update(encode_string(i_s))
+  h.update(encode_string(k_s))
 }
 
 ///|
@@ -347,12 +440,12 @@ pub struct KexContext {
   i_c : Bytes
   mut i_s : Bytes
   cookie : Bytes
-  priv ephemeral : @crypto.PKey?
-  priv peer_host_key : Bytes
-  exchange_hash : Bytes
-  shared_secret : Bytes
-  session_id : Bytes
-  priv session_id_set : Bool
+  priv mut ephemeral : @crypto.PKey?
+  priv mut peer_host_key : Bytes
+  mut exchange_hash : Bytes
+  mut shared_secret : Bytes
+  mut session_id : Bytes
+  priv mut session_id_set : Bool
 }
 
 ///|
@@ -416,12 +509,8 @@ pub fn KexContext::drive(
   self : KexContext,
   read_packet : () -> Bytes raise SshError,
   write_packet : (Bytes) -> Unit raise SshError,
+  accept_host_key : (String, Bytes) -> Bool,
 ) -> Unit raise SshError {
-  // TODO(Step 4.2): implement the full state machine. This is intentionally
-  // a stub — it advances the state to `Done` but does not perform any
-  // actual KEX. The packet framing, crypto primitives, and algorithm
-  // registry are all in place; the missing piece is the I/O loop that
-  // threads them together.
   if self.state != Initial {
     raise ProtocolError("kex: invalid state \{self.state}")
   }
@@ -445,10 +534,13 @@ pub fn KexContext::drive(
     "compression",
     server.first_comp(compression_algorithms()),
   )
-  self.transition_to(SentDhInit)
-  raise ProtocolError(
-    "kex: KEXDH/ECDH exchange is not implemented after KEXINIT negotiation",
-  )
+  if is_curve25519_algorithm(self.kex_alg) {
+    self.drive_curve25519(read_packet, write_packet, accept_host_key)
+  } else {
+    raise ProtocolError(
+      "kex: unsupported key exchange algorithm \{self.kex_alg}",
+    )
+  }
 }
 
 ///|
@@ -457,4 +549,98 @@ fn require_algorithm(kind : String, value : String?) -> String raise SshError {
     Some(alg) => alg
     None => raise ProtocolError("kex: no matching \{kind} algorithm")
   }
+}
+
+///|
+fn is_curve25519_algorithm(alg : String) -> Bool {
+  alg == "curve25519-sha256" || alg == "curve25519-sha256@libssh.org"
+}
+
+///|
+#cfg(not(platform="windows"))
+fn hash_algorithm_for_kex(alg : String) -> @crypto.Algorithm raise SshError {
+  match alg {
+    "diffie-hellman-group14-sha1" => @crypto.Algorithm::sha1()
+    "curve25519-sha256"
+    | "curve25519-sha256@libssh.org"
+    | "ecdh-sha2-nistp256"
+    | "diffie-hellman-group14-sha256" => @crypto.Algorithm::sha256()
+    _ => raise ProtocolError("kex: no hash algorithm for \{alg}")
+  }
+}
+
+///|
+#cfg(platform="windows")
+fn KexContext::drive_curve25519(
+  self : KexContext,
+  _read_packet : () -> Bytes raise SshError,
+  _write_packet : (Bytes) -> Unit raise SshError,
+  _accept_host_key : (String, Bytes) -> Bool,
+) -> Unit raise SshError {
+  self.transition_to(SentDhInit)
+  self.shared_secret = b""
+  self.exchange_hash = b""
+  self.session_id = b""
+  self.session_id_set = false
+  raise ProtocolError(
+    "kex: curve25519 exchange needs a crypto backend; Windows native crypto " +
+    "is not wired up yet",
+  )
+}
+
+///|
+#cfg(not(platform="windows"))
+fn KexContext::drive_curve25519(
+  self : KexContext,
+  read_packet : () -> Bytes raise SshError,
+  write_packet : (Bytes) -> Unit raise SshError,
+  accept_host_key : (String, Bytes) -> Bool,
+) -> Unit raise SshError {
+  let (ephemeral, _private_key) = @crypto.x25519_generate() catch {
+    e => raise ProtocolError("kex: \{e.message()}")
+  }
+  let client_public = ephemeral.raw_public() catch {
+    e => raise ProtocolError("kex: \{e.message()}")
+  }
+  self.ephemeral = Some(ephemeral)
+  write_packet(build_ecdh_init_payload(client_public))
+  self.transition_to(SentDhInit)
+  let reply = parse_ecdh_reply_payload(read_packet())
+  let host_key_alg = parse_host_key_algorithm(reply.host_key)
+  if host_key_alg != self.host_key_alg {
+    raise ProtocolError(
+      "kex: negotiated host key \{self.host_key_alg}, got \{host_key_alg}",
+    )
+  }
+  if !accept_host_key(host_key_alg, reply.host_key) {
+    raise HostKeyMismatch(host_key_alg)
+  }
+  self.peer_host_key = reply.host_key
+  let shared = @crypto.x25519_derive(ephemeral, reply.server_public) catch {
+    e => raise ProtocolError("kex: \{e.message()}")
+  }
+  self.shared_secret = shared
+  self.exchange_hash = compute_ecdh_exchange_hash(
+    hash_algorithm_for_kex(self.kex_alg),
+    self.v_c,
+    self.v_s,
+    self.i_c,
+    self.i_s,
+    reply.host_key,
+    client_public,
+    reply.server_public,
+    shared,
+  ) catch {
+    e => raise ProtocolError("kex: \{e.message()}")
+  }
+  if !self.session_id_set {
+    self.session_id = self.exchange_hash
+    self.session_id_set = true
+  }
+  self.transition_to(ComputingHash)
+  let _sig = parse_signature_blob(reply.signature)
+  raise ProtocolError(
+    "kex: host key signature verification is not implemented after " +
+    "Curve25519 exchange hash computation",
+  )
 }

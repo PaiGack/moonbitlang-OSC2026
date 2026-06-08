@@ -71,6 +71,7 @@ pub struct Client {
   priv banner_server : String
   priv kex : KexContext
   priv auth : AuthContext
+  priv accept_host_key : (String, Bytes) -> Bool
   priv mut session_id : Bytes
   mut next_channel_id : Int
 }
@@ -117,6 +118,7 @@ pub fn Client::connect(opts : ConnectOptions) -> Client raise SshError {
     banner_server: banner_line,
     kex,
     auth,
+    accept_host_key: opts.accept_host_key,
     session_id: b"",
     next_channel_id: 0,
   }
@@ -124,12 +126,14 @@ pub fn Client::connect(opts : ConnectOptions) -> Client raise SshError {
 
 ///|
 /// Run the SSH key exchange (KEXINIT / KEXDH / NEWKEYS).
-/// v0.1: stub — real implementation is `KexContext::drive` with the
-/// concrete transport; that loop is left as a TODO (Step 4.2).
+/// The current transport path drives plaintext KEX packets; encrypted packet
+/// IO is installed by a later transport step.
 pub fn Client::kex(self : Client) -> Unit raise SshError {
-  self.kex.drive(() => self.read_plain_packet(), payload => {
-    self.write_plain_packet(payload)
-  })
+  self.kex.drive(
+    () => self.read_plain_packet(),
+    payload => self.write_plain_packet(payload),
+    self.accept_host_key,
+  )
   self.session_id = self.kex.session_id
 }
 
