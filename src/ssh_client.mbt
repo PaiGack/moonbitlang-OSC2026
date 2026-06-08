@@ -154,8 +154,9 @@ pub fn Client::kex(self : Client) -> Unit raise SshError {
   )
   self.session_id = self.kex.session_id
 
-  // Install encryption
-  self.install_encryption()
+  // Derive and install encryption
+  let keys = self.kex.derive_session_keys()
+  self.install_encryption(keys)
 }
 
 ///|
@@ -224,13 +225,67 @@ pub fn Client::open_session(self : Client) -> Channel {
 /// Send an `exec` request and read the resulting stdout / exit-status.
 /// v0.1: stub — needs the full transport + channel pump.
 pub fn Client::exec(
-  _self : Client,
-  _channel : Channel,
-  _command : String,
-) -> String {
-  abort(
-    "Client::exec: not yet implemented (v0.1 stub — see docs/prd_001.md §Step 4.5)",
+  self : Client,
+  channel : Channel,
+  command : String,
+) -> String raise SshError {
+  // 1. Open channel
+  let open_msg = build_channel_open(
+    channel.id(),
+    1024 * 1024,
+    32 * 1024,
   )
+  self.write_packet(open_msg)
+
+  // Wait for CHANNEL_OPEN_CONFIRMATION
+  while true {
+    let payload = self.read_packet()
+    let responses = channel.handle_inbound(payload)
+    for resp in responses {
+      self.write_packet(resp)
+    }
+    if channel.is_open() {
+      break
+    }
+    if channel.state() == Done {
+      raise ProtocolError("channel: failed to open")
+    }
+  }
+
+  // 2. Send exec request
+  let exec_msg = build_channel_request_exec(channel.peer_id, command)
+  self.write_packet(exec_msg)
+
+  // 3. Read data until EOF
+  while true {
+    let payload = self.read_packet()
+    let responses = channel.handle_inbound(payload)
+    for resp in responses {
+      self.write_packet(resp)
+    }
+
+    // Check if we've reached EOF
+    if channel.state() == EofReceived || channel.state() == Done {
+      break
+    }
+  }
+
+  // 4. Wait for CLOSE and send our CLOSE
+  if channel.state() != Done {
+    while true {
+      let payload = self.read_packet()
+      let responses = channel.handle_inbound(payload)
+      for resp in responses {
+        self.write_packet(resp)
+      }
+      if channel.state() == Done {
+        break
+      }
+    }
+  }
+
+  // Return stdout
+  channel.take_stdout()
 }
 
 ///|
@@ -242,6 +297,26 @@ pub fn Client::close(self : Client) -> Unit {
 }
 
 // --- Internal helpers -----------------------------------------------
+
+///|
+/// Read a packet (automatically uses encrypted or plain based on state).
+fn Client::read_packet(self : Client) -> Bytes raise SshError {
+  if self.encrypted {
+    self.read_encrypted_packet()
+  } else {
+    self.read_plain_packet()
+  }
+}
+
+///|
+/// Write a packet (automatically uses encrypted or plain based on state).
+fn Client::write_packet(self : Client, payload : Bytes) -> Unit raise SshError {
+  if self.encrypted {
+    self.write_encrypted_packet(payload)
+  } else {
+    self.write_plain_packet(payload)
+  }
+}
 
 ///|
 fn read_line(conn : @socket.Tcp) -> String raise SshError {
@@ -300,15 +375,15 @@ fn strip_line_ending(line : String) -> String {
 
 ///|
 /// Install encryption after successful KEX.
-fn Client::install_encryption(self : Client) -> Unit raise SshError {
+fn Client::install_encryption(self : Client, keys : DerivedKeys) -> Unit raise SshError {
   let enc_alg = parse_cipher_algorithm(self.kex.enc_alg)
   let mac_alg = parse_mac_algorithm(self.kex.mac_alg)
 
   // Create cipher contexts
   let cipher_c2s = @crypto.Cipher::new(
     enc_alg,
-    self.kex.enc_key_c2s,
-    self.kex.iv_c2s,
+    keys.enc_key_c2s,
+    keys.iv_c2s,
     encrypt=true,
   ) catch {
     e => raise ProtocolError("install cipher c2s: \{e.message()}")
@@ -316,8 +391,8 @@ fn Client::install_encryption(self : Client) -> Unit raise SshError {
 
   let cipher_s2c = @crypto.Cipher::new(
     enc_alg,
-    self.kex.enc_key_s2c,
-    self.kex.iv_s2c,
+    keys.enc_key_s2c,
+    keys.iv_s2c,
     encrypt=false,
   ) catch {
     e => raise ProtocolError("install cipher s2c: \{e.message()}")
@@ -330,8 +405,8 @@ fn Client::install_encryption(self : Client) -> Unit raise SshError {
 
   // Create MAC contexts if not AEAD
   if !enc_alg.is_aead() {
-    let mac_c2s = @crypto.Mac::new(mac_alg, self.kex.mac_key_c2s)
-    let mac_s2c = @crypto.Mac::new(mac_alg, self.kex.mac_key_s2c)
+    let mac_c2s = @crypto.Mac::new(mac_alg, keys.mac_key_c2s)
+    let mac_s2c = @crypto.Mac::new(mac_alg, keys.mac_key_s2c)
     self.mac_c2s = Some(mac_c2s)
     self.mac_s2c = Some(mac_s2c)
   }

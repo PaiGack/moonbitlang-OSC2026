@@ -390,6 +390,19 @@ fn kdf(
   Bytes::from_fixedarray(view)
 }
 
+// --- Derived keys structure ---------------------------------------------
+
+///|
+/// Encryption keys derived from KEX.
+pub struct DerivedKeys {
+  pub iv_c2s : Bytes
+  pub iv_s2c : Bytes
+  pub enc_key_c2s : Bytes
+  pub enc_key_s2c : Bytes
+  pub mac_key_c2s : Bytes
+  pub mac_key_s2c : Bytes
+}
+
 // --- KEX state machine scaffolding -----------------------------------
 
 ///|
@@ -446,13 +459,6 @@ pub struct KexContext {
   mut shared_secret : Bytes
   mut session_id : Bytes
   priv mut session_id_set : Bool
-  // Derived encryption keys (set after NEWKEYS)
-  mut iv_c2s : Bytes
-  mut iv_s2c : Bytes
-  mut enc_key_c2s : Bytes
-  mut enc_key_s2c : Bytes
-  mut mac_key_c2s : Bytes
-  mut mac_key_s2c : Bytes
 }
 
 ///|
@@ -477,12 +483,6 @@ pub fn KexContext::new(v_c : Bytes, v_s : Bytes) -> KexContext {
     shared_secret: b"",
     session_id: b"",
     session_id_set: false,
-    iv_c2s: b"",
-    iv_s2c: b"",
-    enc_key_c2s: b"",
-    enc_key_s2c: b"",
-    mac_key_c2s: b"",
-    mac_key_s2c: b"",
   }
 }
 
@@ -567,6 +567,19 @@ fn require_algorithm(kind : String, value : String?) -> String raise SshError {
 ///|
 fn is_curve25519_algorithm(alg : String) -> Bool {
   alg == "curve25519-sha256" || alg == "curve25519-sha256@libssh.org"
+}
+
+///|
+#cfg(platform="windows")
+fn hash_algorithm_for_kex(alg : String) -> @crypto.Algorithm raise SshError {
+  match alg {
+    "diffie-hellman-group14-sha1" => @crypto.Algorithm::sha1()
+    "curve25519-sha256"
+    | "curve25519-sha256@libssh.org"
+    | "ecdh-sha2-nistp256"
+    | "diffie-hellman-group14-sha256" => @crypto.Algorithm::sha256()
+    _ => raise ProtocolError("kex: no hash algorithm for \{alg}")
+  }
 }
 
 ///|
@@ -671,29 +684,7 @@ fn KexContext::drive_curve25519(
     raise ProtocolError("kex: expected SSH_MSG_NEWKEYS")
   }
 
-  // Derive session keys
   self.transition_to(InstallKeys)
-  let hash_alg = hash_algorithm_for_kex(self.kex_alg)
-  let (enc_key_len, iv_len, mac_key_len) = key_material_sizes(self.enc_alg, self.mac_alg)
-  let (iv_c2s, iv_s2c, ek_c2s, ek_s2c, mk_c2s, mk_s2c) = derive_keys(
-    hash_alg,
-    self.exchange_hash,
-    self.shared_secret,
-    self.session_id,
-    enc_key_len,
-    iv_len,
-    mac_key_len,
-  ) catch {
-    e => raise ProtocolError("kex: key derivation failed: \{e.message()}")
-  }
-
-  self.iv_c2s = iv_c2s
-  self.iv_s2c = iv_s2c
-  self.enc_key_c2s = ek_c2s
-  self.enc_key_s2c = ek_s2c
-  self.mac_key_c2s = mk_c2s
-  self.mac_key_s2c = mk_s2c
-
   self.transition_to(Done)
 }
 
@@ -837,4 +828,37 @@ fn key_material_sizes(enc_alg : String, mac_alg : String) -> (Int, Int, Int) {
 fn is_aead_cipher(alg : String) -> Bool {
   alg == "aes128-gcm@openssh.com" || alg == "aes256-gcm@openssh.com" ||
   alg == "chacha20-poly1305@openssh.com"
+}
+
+// --- Key derivation (after KEX complete) -----------------------------
+
+///|
+/// Derive session encryption keys after KEX is complete.
+pub fn KexContext::derive_session_keys(self : KexContext) -> DerivedKeys raise SshError {
+  if self.state != Done {
+    raise ProtocolError("kex: cannot derive keys, KEX is not complete")
+  }
+
+  let hash_alg = hash_algorithm_for_kex(self.kex_alg)
+  let (enc_key_len, iv_len, mac_key_len) = key_material_sizes(self.enc_alg, self.mac_alg)
+  let (iv_c2s, iv_s2c, ek_c2s, ek_s2c, mk_c2s, mk_s2c) = derive_keys(
+    hash_alg,
+    self.exchange_hash,
+    self.shared_secret,
+    self.session_id,
+    enc_key_len,
+    iv_len,
+    mac_key_len,
+  ) catch {
+    e => raise ProtocolError("kex: key derivation failed: \{e.message()}")
+  }
+
+  {
+    iv_c2s,
+    iv_s2c,
+    enc_key_c2s: ek_c2s,
+    enc_key_s2c: ek_s2c,
+    mac_key_c2s: mk_c2s,
+    mac_key_s2c: mk_s2c,
+  }
 }

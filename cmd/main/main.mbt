@@ -34,7 +34,9 @@ fn main {
     e => abort("auth: " + e.to_string())
   }
   let ch = client.open_session()
-  let output = client.exec(ch, command)
+  let output = client.exec(ch, command) catch {
+    e => abort("exec: " + e.to_string())
+  }
   println(output)
 }
 
