@@ -1,1 +1,6 @@
 // Socket module package configuration
+options(
+  targets: {
+    "socket.mbt": [ "native" ],
+  },
+)

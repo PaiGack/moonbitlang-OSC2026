@@ -5,6 +5,15 @@ This is a [MoonBit](https://docs.moonbitlang.com) project.
 You can browse and install extra skills here:
 <https://github.com/moonbitlang/skills>
 
+## Project Overview
+
+This repository is a MoonBit SSH client library entry for the MoonBit 2026 Open
+Source Competition. The goal is to implement SSH protocol support for the
+MoonBit ecosystem.
+
+The current implementation is focused on the transport layer, with TCP
+connection support as the foundation for the SSH protocol.
+
 ## Project Structure
 
 - MoonBit packages are organized per directory; each directory contains a
@@ -14,6 +23,12 @@ You can browse and install extra skills here:
 
 - In the toplevel directory, there is a `moon.mod` file listing module
   metadata.
+
+- Important current paths:
+  - `cmd/main/main.mbt` is the main program entry point.
+  - `ssh_client.mbt` contains root package library code.
+  - `ssh_client_test.mbt` contains blackbox tests for the root package.
+  - `ssh_client_wbtest.mbt` contains whitebox tests for the root package.
 
 ## Coding convention
 
@@ -25,6 +40,12 @@ You can browse and install extra skills here:
   directory.
 
 ## Tooling
+
+- `moon build` is used to build the project.
+
+- `moon run cmd/main` is used to run the main program.
+
+- `moon add <package>` is used to add dependencies.
 
 - `moon fmt` is used to format your code properly.
 
