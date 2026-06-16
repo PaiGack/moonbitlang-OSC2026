@@ -24,40 +24,41 @@ jobs:
 
       - name: Moon test
         run: |
+          echo moon test
           moon test --enable-coverage
           moon coverage report -f summary
 
-      - name: Make scripts executable
-        run: |
-          chmod +x -R script || true
-          chmod +x -R cmd || true
+          echo moon test native
+          moon test --target native --enable-coverage
+          moon coverage --target native report -f summary
 
-      # =========================
-      # 1. run ssh-server scripts
-      # =========================
-      - name: Run ssh-server scripts
+      - name: Run ssh-server scripts, start ssh server
         run: |
           set -e
 
           echo "Running ssh-server scripts..."
 
-          for f in script/ssh-server/*.sh; do
+          cd scripts/ssh-server/
+          chmod +x *.sh
+          
+          for f in *.sh; do
             echo "==> Running $f"
             bash "$f"
           done
 
-      # =========================
-      # 2. run cmd/*/run.sh sequentially
-      # =========================
-      - name: Run cmd modules sequentially
+      - name: Run cmd modules sequentially, run moon connect to ssh server
         run: |
           set -e
 
           echo "Running cmd run.sh..."
+          export workspace=$(pwd)
 
           for d in cmd/*; do
             if [ -f "$d/run.sh" ]; then
               echo "==> Running $d/run.sh"
-              bash "$d/run.sh"
+              cd $d
+              chmod +x run.sh
+              bash run.sh
+              cd ..
             fi
           done
